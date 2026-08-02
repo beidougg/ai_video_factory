@@ -1,0 +1,14 @@
+{
+  "file": "product_001_closeup.mp4",
+  "duration": 5.2,
+  "resolution": "1920x1080",
+  "fps": 30,
+  "tags": ["产品展示", "特写", "俯拍", "旋转"],
+  "scenario": "产品首镜头",
+  "quality": "S",
+  "source": "自拍",
+  "usage_count": 0,
+  "avg_retention": 0.0,
+  "created_at": "2024-01-01",
+  "file_path": "assets/videos/products/product_001_closeup.mp4"
+}

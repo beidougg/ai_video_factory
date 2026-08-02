@@ -1,0 +1,17 @@
+{
+  "name": "ai-video-factory-remotion",
+  "private": true,
+  "scripts": {
+    "render": "npx remotion render src/index.tsx out/final.mp4",
+    "preview": "npx remotion preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "^4.0.0",
+    "@remotion/cli": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0"
+  }
+}

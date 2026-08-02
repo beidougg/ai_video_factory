@@ -1,0 +1,351 @@
+{
+  "name": "AI Video Factory - 内容生产Pipeline",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "video-idea",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f20285c7-89d7-4f48-ad29-0fc73adf48a2",
+      "name": "接收创意输入",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javascript",
+        "jsCode": "// 读取用户创意并构建 DeepSeek 请求\nconst idea = $input.first().json.idea || $input.first().json.body?.idea || $input.first().json.text || JSON.stringify($input.first().json);\n\nconst systemPrompt = `你是一位专业的短视频选题分析师，擅长分析内容方向、受众心理和平台算法。\n\n## 任务\n分析用户提交的创意，输出一份结构化的选题分析报告。\n\n## 输入\n用户创意：{{user_idea}}\n\n## 输出要求\n请严格按以下 JSON 格式输出，不要包含任何其他文字：\n\n```json\n{\n  \"direction\": \"选题方向（一句话概括）\",\n  \"target_audience\": \"目标受众画像\",\n  \"recommended_angles\": [\"推荐角度1\", \"推荐角度2\", \"推荐角度3\"],\n  \"hot_match\": \"热点匹配度评估（高/中/低 + 简要理由）\",\n  \"risk_warning\": \"风险提示\",\n  \"estimated_duration\": \"建议视频时长（秒）\",\n  \"platform_fit\": {\"youtube\": \"YouTube适配度\", \"kuaishou\": \"快手适配度\"},\n  \"summary\": \"200-300字选题分析总结\"\n}\n````;\n\nreturn {\n  body: {\n    model: \"deepseek-chat\",\n    messages: [\n      { role: \"system\", content: systemPrompt },\n      { role: \"user\", content: `用户创意：${idea}` }\n    ],\n    temperature: 0.8,\n    max_tokens: 2000\n  },\n  url: \"https://api.deepseek.com/v1/chat/completions\"\n};"
+      },
+      "id": "1947125b-49e0-47b9-912e-6a4dda03828c",
+      "name": "构建选题分析Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        550,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "options": {
+          "body": {
+            "body": "={{ JSON.stringify($json.body) }}"
+          }
+        },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer sk-4a6e00338ce94e15bf9b8a9c79a6119d"
+            }
+          ]
+        }
+      },
+      "id": "b5278894-bcfc-4f11-a621-ed9985bedc64",
+      "name": "DeepSeek选题分析",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javascript",
+        "jsCode": "// 解析 DeepSeek 返回的 JSON 选题分析\nconst response = $input.first().json;\nlet content = response.choices?.[0]?.message?.content || '';\n\n// 尝试提取 JSON\nlet analysis;\ntry {\n  // 移除可能的 markdown 代码块标记\n  content = content.replace(/```json\\s*/g, '').replace(/```\\s*/g, '').trim();\n  analysis = JSON.parse(content);\n} catch (e) {\n  analysis = {\n    raw_response: content,\n    parse_error: e.message\n  };\n}\n\nreturn {\n  analysis: analysis,\n  raw_content: content,\n  timestamp: new Date().toISOString(),\n  model: response.model,\n  usage: response.usage\n};"
+      },
+      "id": "ae9b28dc-1e5a-4e8d-9823-ce36749cd7c5",
+      "name": "解析选题分析结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1150,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resume": "webhook",
+        "options": {
+          "webhookSuffix": "review-script"
+        }
+      },
+      "id": "a12a2b90-307a-4568-94ed-b21511da012d",
+      "name": "审核点1_等待飞书确认",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "operation": "equals",
+              "value2": "approve"
+            }
+          ]
+        }
+      },
+      "id": "f3fee927-76da-43a2-b8e4-e708b8db17b5",
+      "name": "判断审核结果",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        1750,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javascript",
+        "jsCode": "// 获取审核通过的选题分析结果，构建脚本生成请求\nconst analysis = $input.first().json.analysis || $input.first().json;\n\nconst systemPrompt = `你是一位专业的短视频编剧，擅长撰写节奏紧凑、信息密度高的口播脚本。\n\n## 任务\n根据选题分析报告，生成一份完整的短视频脚本。\n\n## 输入\n选题分析报告：{{topic_analysis}}\n\n## 输出要求\n请严格按以下 JSON 格式输出，不要包含任何其他文字：\n\n```json\n{\n  \"title\": \"视频标题（不超过20字）\",\n  \"total_duration\": 60,\n  \"hook\": \"开场钩子文案\",\n  \"scenes\": [\n    {\"index\": 1, \"text\": \"口播文案\", \"duration\": 5.0, \"suggestion\": \"画面建议\", \"required_tags\": [\"标签\"]}\n  ],\n  \"cta\": \"结尾引导文案\",\n  \"hashtags\": [\"#标签\"]\n}\n```\n\n## 编写规则\n每段 3-10 秒，总时长 30-90 秒；前3秒制造悬念；每段文案不超过50字；scenes 至少5段最多15段。`;\n\nreturn {\n  body: {\n    model: \"deepseek-chat\",\n    messages: [\n      { role: \"system\", content: systemPrompt },\n      { role: \"user\", content: JSON.stringify(analysis, null, 2) }\n    ],\n    temperature: 0.8,\n    max_tokens: 4000\n  },\n  url: \"https://api.deepseek.com/v1/chat/completions\"\n};"
+      },
+      "id": "e119170e-d652-40e6-afad-7f50c0ad43a5",
+      "name": "构建脚本生成Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2050,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "sendBody": true,
+        "options": {
+          "body": {
+            "body": "={{ JSON.stringify($json.body) }}"
+          }
+        },
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer sk-4a6e00338ce94e15bf9b8a9c79a6119d"
+            }
+          ]
+        }
+      },
+      "id": "be837804-b6c6-4c33-bbac-c9c91cf6fa6c",
+      "name": "DeepSeek生成脚本",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        2350,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javascript",
+        "jsCode": "// 解析 DeepSeek 生成的脚本 JSON\nconst response = $input.first().json;\nlet content = response.choices?.[0]?.message?.content || '';\n\nlet script;\ntry {\n  content = content.replace(/```json\\s*/g, '').replace(/```\\s*/g, '').trim();\n  script = JSON.parse(content);\n} catch (e) {\n  script = { raw_response: content, parse_error: e.message };\n}\n\nreturn {\n  script: script,\n  raw_content: content,\n  timestamp: new Date().toISOString(),\n  usage: response.usage\n};"
+      },
+      "id": "e5c415df-be55-443e-868e-5963cb2d66d5",
+      "name": "解析脚本结果",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2650,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "a879592d-7437-476c-8da4-d8a5a52e6738",
+      "name": "返回结果",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        2950,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javascript",
+        "jsCode": "// 打回消息，返回反馈给用户\nconst feedback = $input.first().json.feedback || '请提供修改意见';\n\nreturn {\n  status: 'rejected',\n  feedback: feedback,\n  message: '已收到打回意见，请重新提交创意'\n};"
+      },
+      "id": "a9c85df0-0068-43e4-bfd0-2f54e4eee602",
+      "name": "重新生成提示",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        2050,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javascript",
+        "jsCode": "// 提取选题分析摘要，准备飞书通知内容\nconst data = $input.first().json;\nconst analysis = data.analysis || {};\n\nreturn {\n  review_point: 1,\n  review_type: 'topic_analysis',\n  title: analysis.direction || analysis.title || '选题分析完成',\n  summary: analysis.summary || '',\n  recommended_angles: analysis.recommended_angles || [],\n  estimated_duration: analysis.estimated_duration || 60,\n  hot_match: analysis.hot_match || '',\n  risk_warning: analysis.risk_warning || '无显著风险',\n  full_analysis: JSON.stringify(analysis, null, 2),\n  action_prompt: '请回复 \"通过\" 或 \"打回+修改意见\"'\n};"
+      },
+      "id": "d0641d0a-c3de-4108-aa34-fd2a79bd1d0e",
+      "name": "飞书通知HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1450,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "f20285c7-89d7-4f48-ad29-0fc73adf48a2": {
+      "main": [
+        [
+          {
+            "node": "1947125b-49e0-47b9-912e-6a4dda03828c",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1947125b-49e0-47b9-912e-6a4dda03828c": {
+      "main": [
+        [
+          {
+            "node": "b5278894-bcfc-4f11-a621-ed9985bedc64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "b5278894-bcfc-4f11-a621-ed9985bedc64": {
+      "main": [
+        [
+          {
+            "node": "ae9b28dc-1e5a-4e8d-9823-ce36749cd7c5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ae9b28dc-1e5a-4e8d-9823-ce36749cd7c5": {
+      "main": [
+        [
+          {
+            "node": "d0641d0a-c3de-4108-aa34-fd2a79bd1d0e",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "a12a2b90-307a-4568-94ed-b21511da012d",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "a12a2b90-307a-4568-94ed-b21511da012d": {
+      "main": [
+        [
+          {
+            "node": "f3fee927-76da-43a2-b8e4-e708b8db17b5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "f3fee927-76da-43a2-b8e4-e708b8db17b5": {
+      "main": [
+        [
+          {
+            "node": "e119170e-d652-40e6-afad-7f50c0ad43a5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "a9c85df0-0068-43e4-bfd0-2f54e4eee602",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "e119170e-d652-40e6-afad-7f50c0ad43a5": {
+      "main": [
+        [
+          {
+            "node": "be837804-b6c6-4c33-bbac-c9c91cf6fa6c",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "be837804-b6c6-4c33-bbac-c9c91cf6fa6c": {
+      "main": [
+        [
+          {
+            "node": "e5c415df-be55-443e-868e-5963cb2d66d5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "e5c415df-be55-443e-868e-5963cb2d66d5": {
+      "main": [
+        [
+          {
+            "node": "a879592d-7437-476c-8da4-d8a5a52e6738",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner",
+    "executionOrder": "v1",
+    "timezone": "Asia/Shanghai"
+  },
+  "staticData": null,
+  "versionId": "84797e5c-08b8-424c-91df-6ea5decc5fad"
+}

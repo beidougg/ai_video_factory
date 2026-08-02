@@ -1,0 +1,18 @@
+{
+  "file": "sample.mp4",
+  "file_path": "assets/videos/products/sample.mp4",
+  "type": "video",
+  "duration": 5.0,
+  "resolution": "1920x1080",
+  "tags": [
+    "产品展示",
+    "特写"
+  ],
+  "scenario": "产品首镜头",
+  "quality": "A",
+  "source": "示例",
+  "usage_count": 0,
+  "avg_retention": 0.0,
+  "created_at": "2026-01-01",
+  "notes": "示例元数据模板，请按此格式为实际素材创建"
+}

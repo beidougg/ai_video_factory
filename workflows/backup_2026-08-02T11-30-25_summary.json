@@ -1,0 +1,24 @@
+{
+  "exported_at": "2026-08-02T11-30-25",
+  "engine": "workflow_engine/engine.js",
+  "modules": [
+    "asset_search.js",
+    "engine.js",
+    "export_workflow.js",
+    "qc.js",
+    "tts.js"
+  ],
+  "api_endpoints": [
+    "POST /api/pipeline",
+    "POST /api/topic-analysis",
+    "POST /api/script-gen",
+    "POST /api/metadata",
+    "GET  /health"
+  ],
+  "prompts": [
+    "metadata.txt",
+    "script_gen.txt",
+    "storyboard.txt",
+    "topic_analysis.txt"
+  ]
+}

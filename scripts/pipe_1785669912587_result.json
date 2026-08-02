@@ -1,0 +1,185 @@
+{
+  "pipelineId": "pipe_1785669912587",
+  "userIdea": "最近AI编程工具Claude Code和Cursor竞争激烈，做短视频对比",
+  "startTime": "2026-08-02T11:25:12.588Z",
+  "topicAnalysis": {
+    "analysis": {
+      "direction": "AI编程工具横向测评，聚焦Claude Code与Cursor的实战体验对比",
+      "target_audience": "25-40岁程序员、技术团队负责人、AI工具爱好者及独立开发者，关注效率提升与工具选型",
+      "recommended_angles": [
+        "实测代码生成质量：用同一复杂任务对比两者输出",
+        "价格与性价比：按订阅费、项目规模算投入产出比",
+        "工作流集成度：从IDE插件到终端使用的无缝体验"
+      ],
+      "hot_match": "高：AI编程赛道持续高热，Claude 3.5和Cursor近期更新频繁，开发者社区讨论度激增",
+      "risk_warning": "避免主观贬低某产品；注意版权（引用代码需授权）；不夸大效果以防误导用户",
+      "estimated_duration": 75,
+      "platform_fit": {
+        "youtube": "适合长尾搜索，标题带关键词（如'Claude Code vs Cursor 2024'），内容可深度拆解，吸引持续回放",
+        "kuaishou": "开头5秒用冲突画面（如报错vs流畅）抓注意力，快节奏剪辑，配合'你选哪个'互动引导评论"
+      },
+      "summary": "选题聚焦AI编程工具对比，契合开发者刚需，内容兼具实用性与讨论价值。建议从真实任务实测切入，突出差异而非优劣，降低争议风险。YouTube侧重搜索优化，快手强化视觉冲击和互动钩子。时长控制在60-90秒，平衡信息量与完播率。整体热度高，需注意客观中立，避免过度承诺工具功能。"
+    },
+    "raw": "```json\n{\n  \"direction\": \"AI编程工具横向测评，聚焦Claude Code与Cursor的实战体验对比\",\n  \"target_audience\": \"25-40岁程序员、技术团队负责人、AI工具爱好者及独立开发者，关注效率提升与工具选型\",\n  \"recommended_angles\": [\n    \"实测代码生成质量：用同一复杂任务对比两者输出\",\n    \"价格与性价比：按订阅费、项目规模算投入产出比\",\n    \"工作流集成度：从IDE插件到终端使用的无缝体验\"\n  ],\n  \"hot_match\": \"高：AI编程赛道持续高热，Claude 3.5和Cursor近期更新频繁，开发者社区讨论度激增\",\n  \"risk_warning\": \"避免主观贬低某产品；注意版权（引用代码需授权）；不夸大效果以防误导用户\",\n  \"estimated_duration\": 75,\n  \"platform_fit\": {\n    \"youtube\": \"适合长尾搜索，标题带关键词（如'Claude Code vs Cursor 2024'），内容可深度拆解，吸引持续回放\",\n    \"kuaishou\": \"开头5秒用冲突画面（如报错vs流畅）抓注意力，快节奏剪辑，配合'你选哪个'互动引导评论\"\n  },\n  \"summary\": \"选题聚焦AI编程工具对比，契合开发者刚需，内容兼具实用性与讨论价值。建议从真实任务实测切入，突出差异而非优劣，降低争议风险。YouTube侧重搜索优化，快手强化视觉冲击和互动钩子。时长控制在60-90秒，平衡信息量与完播率。整体热度高，需注意客观中立，避免过度承诺工具功能。\"\n}\n```",
+    "usage": {
+      "prompt_tokens": 434,
+      "completion_tokens": 360,
+      "total_tokens": 794,
+      "prompt_tokens_details": {
+        "cached_tokens": 384
+      },
+      "prompt_cache_hit_tokens": 384,
+      "prompt_cache_miss_tokens": 50
+    }
+  },
+  "script": {
+    "script": {
+      "title": "Claude Code vs Cursor实测！选错亏大了",
+      "total_duration": 75,
+      "hook": "同一个任务，Claude Code和Cursor结果天差地别！",
+      "scenes": [
+        {
+          "index": 1,
+          "text": "同一个任务，Claude Code和Cursor结果天差地别！",
+          "duration": 5,
+          "suggestion": "画面建议：分屏对比，左侧显示Claude Code执行任务，右侧Cursor同时执行，形成强烈视觉冲突。",
+          "required_tags": [
+            "产品展示",
+            "科技感界面"
+          ]
+        },
+        {
+          "index": 2,
+          "text": "我让它们同时写一个复杂的前端组件，猜猜谁先完成？",
+          "duration": 8,
+          "suggestion": "画面建议：俯拍键盘和两台电脑屏幕，快速切换镜头，营造紧张氛围。",
+          "required_tags": [
+            "俯拍",
+            "产品特写"
+          ]
+        },
+        {
+          "index": 3,
+          "text": "速度上Claude Code略胜一筹，但Cursor的代码风格更统一。",
+          "duration": 10,
+          "suggestion": "画面建议：展示两段代码对比，用高亮标记关键差异，并配以数据可视化图表显示耗时。",
+          "required_tags": [
+            "数据可视化",
+            "科技感界面"
+          ]
+        },
+        {
+          "index": 4,
+          "text": "价格呢？Cursor Pro 20刀，Claude Code包含在订阅里，长期用哪个更划算？",
+          "duration": 12,
+          "suggestion": "画面建议：动画演示两个产品的价格页面，并用计算器动画模拟不同项目规模下的成本。",
+          "required_tags": [
+            "动画演示",
+            "产品展示"
+          ]
+        },
+        {
+          "index": 5,
+          "text": "最关键的集成度，Cursor无缝嵌入IDE，Claude Code则更贴近终端工作流。",
+          "duration": 15,
+          "suggestion": "画面建议：分别展示Cursor在IDE中操作和Claude Code在终端中运行的场景，强调不同工作环境。",
+          "required_tags": [
+            "场景展示",
+            "科技感界面"
+          ]
+        },
+        {
+          "index": 6,
+          "text": "如果你是重度IDE用户，Cursor上手快；如果你习惯命令行，Claude Code更强大。",
+          "duration": 10,
+          "suggestion": "画面建议：切换至人物访谈风格，一位开发者分享使用感受，并配以街头访问片段增加真实感。",
+          "required_tags": [
+            "人物访谈",
+            "街头访问"
+          ]
+        },
+        {
+          "index": 7,
+          "text": "总之没有绝对好坏，适合你的才是最好的。评论区聊聊你用哪个？",
+          "duration": 9,
+          "suggestion": "画面建议：回到分屏对比画面，最后定格在问题文字上，引导观众评论。",
+          "required_tags": [
+            "产品展示",
+            "科技感界面"
+          ]
+        },
+        {
+          "index": 8,
+          "text": "关注我，还有更多AI工具深度测评，帮你省时省钱！",
+          "duration": 6,
+          "suggestion": "画面建议：展示频道Logo和订阅按钮动画，配合轻松的背景音乐。",
+          "required_tags": [
+            "动画演示",
+            "产品特写"
+          ]
+        }
+      ],
+      "cta": "你觉得哪个更适合你？评论区聊聊，别忘了点赞关注！",
+      "hashtags": [
+        "#AI编程",
+        "#ClaudeCode",
+        "#Cursor",
+        "#程序员",
+        "#效率工具"
+      ]
+    },
+    "raw": "```json\n{\n  \"title\": \"Claude Code vs Cursor实测！选错亏大了\",\n  \"total_duration\": 75,\n  \"hook\": \"同一个任务，Claude Code和Cursor结果天差地别！\",\n  \"scenes\": [\n    {\n      \"index\": 1,\n      \"text\": \"同一个任务，Claude Code和Cursor结果天差地别！\",\n      \"duration\": 5.0,\n      \"suggestion\": \"画面建议：分屏对比，左侧显示Claude Code执行任务，右侧Cursor同时执行，形成强烈视觉冲突。\",\n      \"required_tags\": [\"产品展示\", \"科技感界面\"]\n    },\n    {\n      \"index\": 2,\n      \"text\": \"我让它们同时写一个复杂的前端组件，猜猜谁先完成？\",\n      \"duration\": 8.0,\n      \"suggestion\": \"画面建议：俯拍键盘和两台电脑屏幕，快速切换镜头，营造紧张氛围。\",\n      \"required_tags\": [\"俯拍\", \"产品特写\"]\n    },\n    {\n      \"index\": 3,\n      \"text\": \"速度上Claude Code略胜一筹，但Cursor的代码风格更统一。\",\n      \"duration\": 10.0,\n      \"suggestion\": \"画面建议：展示两段代码对比，用高亮标记关键差异，并配以数据可视化图表显示耗时。\",\n      \"required_tags\": [\"数据可视化\", \"科技感界面\"]\n    },\n    {\n      \"index\": 4,\n      \"text\": \"价格呢？Cursor Pro 20刀，Claude Code包含在订阅里，长期用哪个更划算？\",\n      \"duration\": 12.0,\n      \"suggestion\": \"画面建议：动画演示两个产品的价格页面，并用计算器动画模拟不同项目规模下的成本。\",\n      \"required_tags\": [\"动画演示\", \"产品展示\"]\n    },\n    {\n      \"index\": 5,\n      \"text\": \"最关键的集成度，Cursor无缝嵌入IDE，Claude Code则更贴近终端工作流。\",\n      \"duration\": 15.0,\n      \"suggestion\": \"画面建议：分别展示Cursor在IDE中操作和Claude Code在终端中运行的场景，强调不同工作环境。\",\n      \"required_tags\": [\"场景展示\", \"科技感界面\"]\n    },\n    {\n      \"index\": 6,\n      \"text\": \"如果你是重度IDE用户，Cursor上手快；如果你习惯命令行，Claude Code更强大。\",\n      \"duration\": 10.0,\n      \"suggestion\": \"画面建议：切换至人物访谈风格，一位开发者分享使用感受，并配以街头访问片段增加真实感。\",\n      \"required_tags\": [\"人物访谈\", \"街头访问\"]\n    },\n    {\n      \"index\": 7,\n      \"text\": \"总之没有绝对好坏，适合你的才是最好的。评论区聊聊你用哪个？\",\n      \"duration\": 9.0,\n      \"suggestion\": \"画面建议：回到分屏对比画面，最后定格在问题文字上，引导观众评论。\",\n      \"required_tags\": [\"产品展示\", \"科技感界面\"]\n    },\n    {\n      \"index\": 8,\n      \"text\": \"关注我，还有更多AI工具深度测评，帮你省时省钱！\",\n      \"duration\": 6.0,\n      \"suggestion\": \"画面建议：展示频道Logo和订阅按钮动画，配合轻松的背景音乐。\",\n      \"required_tags\": [\"动画演示\", \"产品特写\"]\n    }\n  ],\n  \"cta\": \"你觉得哪个更适合你？评论区聊聊，别忘了点赞关注！\",\n  \"hashtags\": [\"#AI编程\", \"#ClaudeCode\", \"#Cursor\", \"#程序员\", \"#效率工具\"]\n}\n```",
+    "usage": {
+      "prompt_tokens": 903,
+      "completion_tokens": 796,
+      "total_tokens": 1699,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 903
+    }
+  },
+  "metadata": {
+    "metadata": {
+      "youtube": {
+        "title": "Claude Code vs Cursor实测！选错亏大了 | AI编程工具深度对比",
+        "description": "同一个任务，Claude Code和Cursor结果天差地别！本期视频实测两款热门AI编程工具，从速度、代码风格、价格、集成度四个维度深度对比，帮你做出最合适的选择。\n\n⏱️ 时间戳：\n00:00 开场：分屏对比震撼开场\n00:05 任务挑战：同时编写复杂前端组件\n00:15 速度与代码风格对比\n00:27 价格成本分析：哪个更划算？\n00:42 集成度对比：IDE vs 终端工作流\n00:57 适用人群建议：你该选哪个？\n01:06 总结与互动\n\n👍 如果你觉得这个视频有帮助，请点赞、订阅并开启小铃铛，获取更多AI工具深度测评！\n\n💬 评论区聊聊：你日常用哪个AI编程工具？有什么独门技巧？\n\n🔗 相关资源：\nClaude Code: https://www.anthropic.com/claude-code\nCursor: https://cursor.com\n\n#AI编程 #ClaudeCode #Cursor #程序员 #效率工具 #AI工具 #编程 #开发工具 #代码生成",
+        "tags": [
+          "AI编程",
+          "Claude Code",
+          "Cursor",
+          "AI工具对比",
+          "程序员效率",
+          "编程工具",
+          "代码生成",
+          "AI助手",
+          "开发工具",
+          "效率工具"
+        ],
+        "category": "Science & Technology",
+        "privacyStatus": "private"
+      },
+      "kuaishou": {
+        "title": "Claude Code vs Cursor实测！选错亏大了",
+        "description": "同一个任务，结果天差地别！速度、价格、集成度全对比，看完不踩坑。你站哪个？评论区聊聊！",
+        "tags": [
+          "AI编程",
+          "ClaudeCode",
+          "Cursor"
+        ]
+      }
+    },
+    "raw": "```json\n{\n  \"youtube\": {\n    \"title\": \"Claude Code vs Cursor实测！选错亏大了 | AI编程工具深度对比\",\n    \"description\": \"同一个任务，Claude Code和Cursor结果天差地别！本期视频实测两款热门AI编程工具，从速度、代码风格、价格、集成度四个维度深度对比，帮你做出最合适的选择。\\n\\n⏱️ 时间戳：\\n00:00 开场：分屏对比震撼开场\\n00:05 任务挑战：同时编写复杂前端组件\\n00:15 速度与代码风格对比\\n00:27 价格成本分析：哪个更划算？\\n00:42 集成度对比：IDE vs 终端工作流\\n00:57 适用人群建议：你该选哪个？\\n01:06 总结与互动\\n\\n👍 如果你觉得这个视频有帮助，请点赞、订阅并开启小铃铛，获取更多AI工具深度测评！\\n\\n💬 评论区聊聊：你日常用哪个AI编程工具？有什么独门技巧？\\n\\n🔗 相关资源：\\nClaude Code: https://www.anthropic.com/claude-code\\nCursor: https://cursor.com\\n\\n#AI编程 #ClaudeCode #Cursor #程序员 #效率工具 #AI工具 #编程 #开发工具 #代码生成\",\n    \"tags\": [\"AI编程\", \"Claude Code\", \"Cursor\", \"AI工具对比\", \"程序员效率\", \"编程工具\", \"代码生成\", \"AI助手\", \"开发工具\", \"效率工具\"],\n    \"category\": \"Science & Technology\",\n    \"privacyStatus\": \"private\"\n  },\n  \"kuaishou\": {\n    \"title\": \"Claude Code vs Cursor实测！选错亏大了\",\n    \"description\": \"同一个任务，结果天差地别！速度、价格、集成度全对比，看完不踩坑。你站哪个？评论区聊聊！\",\n    \"tags\": [\"AI编程\", \"ClaudeCode\", \"Cursor\"]\n  }\n}\n```",
+    "usage": {
+      "prompt_tokens": 1340,
+      "completion_tokens": 438,
+      "total_tokens": 1778,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 1340
+    }
+  }
+}

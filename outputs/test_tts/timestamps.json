@@ -1,0 +1,58 @@
+[
+  {
+    "index": 1,
+    "text": "同一个任务，Claude Code和Cursor结果天差地别！",
+    "start": 0,
+    "end": 4.9,
+    "duration": 4.9
+  },
+  {
+    "index": 2,
+    "text": "我让它们同时写一个复杂的前端组件，猜猜谁先完成？",
+    "start": 4.9,
+    "end": 8.7,
+    "duration": 3.8
+  },
+  {
+    "index": 3,
+    "text": "速度上Claude Code略胜一筹，但Cursor的代码风格更统一。",
+    "start": 8.7,
+    "end": 14.2,
+    "duration": 5.5
+  },
+  {
+    "index": 4,
+    "text": "价格呢？Cursor Pro 20刀，Claude Code包含在订阅里，长期用哪个更划算？",
+    "start": 14.2,
+    "end": 21.5,
+    "duration": 7.3
+  },
+  {
+    "index": 5,
+    "text": "最关键的集成度，Cursor无缝嵌入IDE，Claude Code则更贴近终端工作流。",
+    "start": 21.5,
+    "end": 28.3,
+    "duration": 6.8
+  },
+  {
+    "index": 6,
+    "text": "如果你是重度IDE用户，Cursor上手快；如果你习惯命令行，Claude Code更强大。",
+    "start": 28.3,
+    "end": 35.6,
+    "duration": 7.3
+  },
+  {
+    "index": 7,
+    "text": "总之没有绝对好坏，适合你的才是最好的。评论区聊聊你用哪个？",
+    "start": 35.6,
+    "end": 40.2,
+    "duration": 4.6
+  },
+  {
+    "index": 8,
+    "text": "关注我，还有更多AI工具深度测评，帮你省时省钱！",
+    "start": 40.2,
+    "end": 44,
+    "duration": 3.8
+  }
+]
