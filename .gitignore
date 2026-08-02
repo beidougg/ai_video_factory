@@ -1,6 +1,9 @@
 # 环境变量 (含 API Key)
 .env
 
+# YouTube OAuth Token
+.youtube_token.json
+
 # 依赖
 node_modules/
 

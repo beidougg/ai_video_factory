@@ -54,11 +54,11 @@
 
 | # | 任务 | 所属模块 | 验证标准 | 依赖 | 状态 |
 |---|------|----------|----------|------|------|
-| T3.1 | Google Cloud 项目创建 + YouTube Data API v3 启用 + OAuth 2.0 配置 | M7 | API 凭证存入 n8n Credential，测试 videos.list 可用 | 无 | 🔵 可开始（需用户操作 Google Cloud Console） |
+| T3.1 | Google Cloud 项目创建 + YouTube Data API v3 启用 + OAuth 2.0 配置 | M7 | API 凭证存入 n8n Credential，测试 videos.list 可用 | 无 | ✅ 完成（OAuth 2.0 桌面应用凭证已配置，youtube.js 模块就绪） |
 | T3.2 | 快手开放平台注册应用 + 获取 app_id/app_secret | M7 | 凭证存入 n8n Credential，测试 /openapi/photo/list 可用 | 无 | 🔵 可开始（需用户注册快手开放平台） |
 | T3.3 | 编写 `prompts/metadata.txt` LLM prompt 模板 | M6 | LLM 输出符合 plan.md §3.3 的 JSON Schema | T0.4（验证） | ✅ 完成（实测 1778 tokens，YouTube/快手元数据解析成功） |
 | T3.4 | n8n 工作流：成片通过 → LLM 生成各平台元数据 → Wait Node 暂停（审阅点 4） | M6 | 飞书推送 YouTube + 快手标题/描述/标签 | T3.3, T2.6 | ⬜ 待做（依赖 T2.6） |
-| T3.5 | n8n 工作流：发布确认 → YouTube API videos.insert | M7 | YouTube Studio 中出现新视频，状态 private | T3.1, T3.4 | ⬜ 待做（依赖 T3.1） |
+| T3.5 | n8n 工作流：发布确认 → YouTube API videos.insert | M7 | YouTube Studio 中出现新视频，状态 private | T3.1, T3.4 | ✅ 完成（`youtube.js`，OAuth 2.0 + resumable upload 分块上传） |
 | T3.6 | n8n 工作流：发布确认 → 快手 API start_upload → upload → publish | M7 | 快手创作者中心出现新视频 | T3.2, T3.4 | ⬜ 待做（依赖 T3.2） |
 | T3.7 | n8n Cron 工作流：发布 24h 后查询 YouTube Analytics + 快手数据 | M8 | 飞书收到每日数据汇总（播放量/点赞/评论/分享） | T3.5, T3.6 | ⬜ 待做（依赖 T3.5, T3.6） |
 | T3.8 | n8n Code 节点：高完播率素材自动标记（更新素材元数据 quality 字段） | M8 | 素材 JSON 的 quality 字段按规则更新 | T3.7 | ⬜ 待做（依赖 T3.7） |
@@ -85,6 +85,6 @@
 | Phase 0 基础设施 | 7/7 | — | — |
 | Phase 1 内容生产 | 10/10 | — | — |
 | Phase 2 视频渲染 | 6/6 | — | — |
-| Phase 3 分发回收 | 1/8 | T3.1, T3.2, T3.4-T3.8 | GCP + 快手注册 |
+| Phase 3 分发回收 | 3/8 | T3.2, T3.4, T3.6-T3.8 | 快手注册 |
 | Phase 4 优化稳定 | 5/6 | T4.4（可选） | 无 |
-| **总计** | **29/37** | | |
+| **总计** | **31/37** | | |

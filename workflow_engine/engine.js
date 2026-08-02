@@ -16,6 +16,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 const { generateAndSave } = require('./remotion_props');
 const { renderPipeline, generateVTT } = require('./render');
+const { uploadVideo: youtubeUpload, checkAuth: youtubeStatus, startOAuthFlow: youtubeAuth } = require('./youtube');
 
 // ============ 配置 ============
 const CONFIG = {
@@ -695,6 +696,45 @@ function startServer() {
         return res.end(JSON.stringify({ success: result.success, data: result }));
       }
 
+      // API: YouTube 授权状态 (T3.1)
+      if (url.pathname === '/api/youtube/status' && req.method === 'GET') {
+        const status = youtubeStatus();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify(status));
+      }
+
+      // API: YouTube OAuth 授权 (T3.1) - 触发浏览器授权流程
+      if (url.pathname === '/api/youtube/auth' && req.method === 'POST') {
+        try {
+          const token = await youtubeAuth();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: true, message: 'YouTube 授权成功', expires_at: token.expires_at }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+      }
+
+      // API: YouTube 视频上传 (T3.5)
+      if (url.pathname === '/api/youtube/upload' && req.method === 'POST') {
+        const body = await readBody();
+        const { videoFile, metadata } = JSON.parse(body);
+
+        if (!videoFile) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: '缺少 videoFile 参数' }));
+        }
+
+        try {
+          const result = await youtubeUpload(videoFile, metadata || {});
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: true, data: result }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+      }
+
       // 404
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found', endpoints: [
@@ -705,6 +745,9 @@ function startServer() {
         'POST /api/metadata               # 单独元数据生成',
         'POST /api/tts                    # 单独 TTS 配音生成',
         'POST /api/render                 # 独立渲染管线（含 QC + 重试）',
+        'GET  /api/youtube/status         # YouTube 授权状态',
+        'POST /api/youtube/auth           # YouTube OAuth 授权（打开浏览器）',
+        'POST /api/youtube/upload         # YouTube 视频上传',
         'GET  /api/review/:id             # 查询审核状态',
         'POST /api/review/:id/approve     # 审核通过（自动级联到下一阶段）',
         'POST /api/review/:id/reject      # 审核打回',
