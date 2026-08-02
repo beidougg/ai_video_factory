@@ -13,6 +13,9 @@ const https = require('https');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
+const { generateAndSave } = require('./remotion_props');
+const { renderPipeline, generateVTT } = require('./render');
 
 // ============ 配置 ============
 const CONFIG = {
@@ -228,7 +231,131 @@ async function stepMetadataGeneration(script, videoInfo) {
   return { metadata, raw: content, usage: result.usage };
 }
 
-// ============ 完整 Pipeline 测试 ============
+// ============ 步骤 4: TTS 配音生成 (T1.10) ============
+async function stepTTS(script, pipelineId) {
+  console.log('\n🔊 [步骤4] TTS 配音生成中...');
+  const ttsScript = path.join(CONFIG.PROJECT_DIR, 'workflow_engine', 'tts.js');
+  const outDir = path.join(CONFIG.PROJECT_DIR, 'outputs', pipelineId);
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+
+  // 将脚本写入临时文件
+  const scriptFile = path.join(outDir, 'script.json');
+  fs.writeFileSync(scriptFile, JSON.stringify(script, null, 2), 'utf-8');
+
+  try {
+    const result = execSync(`node "${ttsScript}" "${scriptFile}" "${outDir}"`, {
+      timeout: 120000,
+      encoding: 'utf-8',
+    });
+    console.log(result.slice(-500)); // 只打印最后 500 字符
+
+    const voicePath = path.join(outDir, 'voice.mp3');
+    const timestampsPath = path.join(outDir, 'timestamps.json');
+
+    return {
+      success: fs.existsSync(voicePath),
+      voicePath,
+      timestampsPath,
+      ttsOutput: result,
+    };
+  } catch (e) {
+    console.error('   ❌ TTS 失败:', e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+// ============ 步骤 5: 素材检索 (T1.7) ============
+async function stepAssetSearch(script, pipelineId) {
+  console.log('\n🔍 [步骤5] 素材检索中...');
+  const searchScript = path.join(CONFIG.PROJECT_DIR, 'workflow_engine', 'asset_search.js');
+  const outDir = path.join(CONFIG.PROJECT_DIR, 'outputs', pipelineId);
+  const scriptFile = path.join(outDir, 'script.json');
+
+  // 确保脚本文件存在
+  if (!fs.existsSync(scriptFile)) {
+    fs.writeFileSync(scriptFile, JSON.stringify(script, null, 2), 'utf-8');
+  }
+
+  try {
+    const result = execSync(`node "${searchScript}" "${scriptFile}"`, {
+      timeout: 30000,
+      encoding: 'utf-8',
+    });
+    console.log(result.slice(-500));
+
+    // 尝试解析搜索结果的 JSON 输出
+    let searchResults = null;
+    try {
+      // asset_search.js 输出包含 JSON，提取它
+      const jsonStart = result.indexOf('{');
+      if (jsonStart !== -1) {
+        const candidates = JSON.parse(result.slice(jsonStart));
+        // 检查是否包含 results
+        searchResults = candidates.results || candidates;
+      }
+    } catch {
+      searchResults = null;
+    }
+
+    return {
+      success: true,
+      searchResults,
+      rawOutput: result,
+    };
+  } catch (e) {
+    console.error('   ❌ 素材检索失败:', e.message);
+    return { success: false, error: e.message, searchResults: null };
+  }
+}
+
+// ============ 步骤 6: 分镜匹配 + 审阅点2 创建 (T1.8) ============
+async function stepStoryboardReview(pipelineId, script, ttsResult, assetResult) {
+  console.log('\n🎬 [步骤6] 分镜匹配 + 审阅点2...');
+
+  const reviewData = {
+    pipelineId,
+    script,
+    tts: ttsResult,
+    assetSearch: assetResult,
+    scenesCount: script.scenes?.length || 0,
+    totalDuration: script.total_duration || 0,
+  };
+
+  createReview(pipelineId, reviewData, 2);
+
+  console.log(`   ✅ 审阅点2 已创建: ${script.scenes?.length || 0} 个分镜`);
+  return reviewData;
+}
+
+// ============ 步骤 7: Remotion Props → 渲染 → QC → 审阅点3 (T2.2/T2.3/T2.5/T2.6) ============
+async function stepRenderWithReview(pipelineId, script, ttsResult, assetResult) {
+  console.log('\n🎥 [步骤7] Remotion Props → 渲染管线...');
+
+  // 7a: 生成 Remotion props
+  const propsResult = generateAndSave(script, assetResult?.searchResults, ttsResult?.voicePath, pipelineId);
+
+  // 7b: 渲染
+  const renderResult = await renderPipeline(propsResult.outDir, pipelineId);
+
+  // 7c: 创建审阅点 3
+  const reviewData = {
+    pipelineId,
+    script,
+    props: propsResult.props,
+    renderResult,
+    outputFile: renderResult.outputFile,
+    outputDir: renderResult.outputDir,
+    qcPassed: renderResult.success,
+    retries: renderResult.retries,
+  };
+
+  createReview(pipelineId, reviewData, 3);
+
+  console.log(`   ✅ 审阅点3 已创建: ${renderResult.success ? '质检通过' : '质检失败'}`);
+  return reviewData;
+}
+
+// ============ 完整管线汇总 ============
 async function runFullPipeline(userIdea) {
   const pipelineId = `pipe_${Date.now()}`;
   console.log('='.repeat(60));
@@ -403,49 +530,122 @@ function startServer() {
         }));
       }
       
-      // API: 审核通过 (T1.5)
+      // API: 审核通过 (T1.5 + T1.9 + T2.6)
       if (url.pathname.endsWith('/approve') && url.pathname.includes('/api/review/') && req.method === 'POST') {
         const id = url.pathname.split('/')[3];
         const body = await readBody();
         const { feedback } = JSON.parse(body || '{}');
-        
-        const review = approveReview(id, feedback);
+
+        const review = reviewStore.get(id);
         if (!review) {
           res.writeHead(404, { 'Content-Type': 'application/json' });
           return res.end(JSON.stringify({ error: '审核不存在' }));
         }
-        
-        // 自动执行后续步骤: 元数据生成
+
+        // 标记当前审核点为通过
+        approveReview(id, feedback);
+
         try {
-          const videoInfo = {
-            resolution: '1920x1080', fps: 30, codec: 'h264',
-            duration: review.data.script.script.total_duration || 60,
-          };
-          const metadataResult = await stepMetadataGeneration(review.data.script.script, videoInfo);
-          
-          const outputDir = path.join(CONFIG.PROJECT_DIR, 'scripts');
-          const fullResult = {
-            ...review.data,
-            metadata: metadataResult,
-            review: { status: 'approved', feedback },
-            completedAt: new Date().toISOString(),
-          };
-          fs.writeFileSync(
-            path.join(outputDir, `${review.pipelineId}_result.json`),
-            JSON.stringify(fullResult, null, 2), 'utf-8'
-          );
-          
-          res.writeHead(200, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({
-            success: true,
-            pipelineId: id,
-            status: 'completed',
-            metadata: metadataResult.metadata,
-            output: `scripts/${review.pipelineId}_result.json`,
-          }));
+          // ============ 审核点 1: 脚本确认 → TTS + 素材检索 → 审阅点2 ============
+          if (review.reviewPoint === 1) {
+            const script = review.data.script.script;
+            const ttsResult = await stepTTS(script, id);
+            const assetResult = await stepAssetSearch(script, id);
+            const storyboardReview = await stepStoryboardReview(id, script, ttsResult, assetResult);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+              success: true,
+              pipelineId: id,
+              status: 'pending_review',
+              review_point: 2,
+              review_url: `/api/review/${id}`,
+              summary: {
+                tts_ok: ttsResult.success,
+                voice_path: ttsResult.voicePath,
+                scenes_count: script.scenes?.length || 0,
+                total_duration: script.total_duration || 0,
+              },
+              message: '审阅点2: 请确认分镜与素材匹配，通过后调用 POST /api/review/:id/approve',
+            }));
+          }
+
+          // ============ 审核点 2: 分镜确认 → Remotion Props → 渲染 → 审阅点3 ============
+          if (review.reviewPoint === 2) {
+            const script = review.data.script;
+            const ttsResult = review.data.tts;
+            const assetResult = review.data.assetSearch;
+            const renderReview = await stepRenderWithReview(id, script, ttsResult, assetResult);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+              success: true,
+              pipelineId: id,
+              status: 'pending_review',
+              review_point: 3,
+              review_url: `/api/review/${id}`,
+              summary: {
+                output_file: renderReview.outputFile,
+                qc_passed: renderReview.qcPassed,
+                retries: renderReview.retries,
+                scenes_count: script.scenes?.length || 0,
+              },
+              message: '审阅点3: 请确认成片效果，通过后调用 POST /api/review/:id/approve 生成元数据',
+            }));
+          }
+
+          // ============ 审核点 3: 成片确认 → 元数据生成 → 完成 ============
+          if (review.reviewPoint === 3) {
+            const script = review.data.script;
+            const videoInfo = {
+              resolution: '1920x1080', fps: 30, codec: 'h264',
+              duration: script.total_duration || 60,
+            };
+            const metadataResult = await stepMetadataGeneration(script, videoInfo);
+
+            // 保存完整管线结果
+            const outputDir = path.join(CONFIG.PROJECT_DIR, 'scripts');
+            const fullResult = {
+              pipelineId: id,
+              userIdea: review.data.pipelineId ? '待补充' : '',
+              script,
+              tts: review.data.tts,
+              render: {
+                outputFile: review.data.outputFile,
+                outputDir: review.data.outputDir,
+                qcPassed: review.data.qcPassed,
+                retries: review.data.retries,
+              },
+              metadata: metadataResult,
+              reviews: {
+                point1: { status: 'approved', time: new Date(review.createdAt).toISOString() },
+                point3: { status: 'approved', feedback, time: new Date().toISOString() },
+              },
+              completedAt: new Date().toISOString(),
+            };
+            fs.writeFileSync(
+              path.join(outputDir, `${id}_result.json`),
+              JSON.stringify(fullResult, null, 2), 'utf-8'
+            );
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+              success: true,
+              pipelineId: id,
+              status: 'completed',
+              metadata: metadataResult.metadata,
+              output: `scripts/${id}_result.json`,
+              message: '🎉 管线完成! 所有步骤已执行并保存',
+            }));
+          }
+
+          // 未知审核点
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: `未知审核点: ${review.reviewPoint}` }));
         } catch (e) {
+          console.error(`审核点${review.reviewPoint} 执行失败:`, e.message);
           res.writeHead(500, { 'Content-Type': 'application/json' });
-          return res.end(JSON.stringify({ success: false, error: e.message }));
+          return res.end(JSON.stringify({ success: false, error: e.message, review_point: review.reviewPoint }));
         }
       }
       
@@ -471,16 +671,42 @@ function startServer() {
         }));
       }
       
+      // API: 独立渲染 (T2.3) - 从 props 目录触发渲染管线
+      if (url.pathname === '/api/render' && req.method === 'POST') {
+        const body = await readBody();
+        const { propsDir, pipelineId } = JSON.parse(body);
+
+        if (!propsDir) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: '缺少 propsDir 参数' }));
+        }
+
+        const result = await renderPipeline(propsDir, pipelineId || `render_${Date.now()}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: result.success, data: result }));
+      }
+
+      // API: TTS 配音生成 (T1.10)
+      if (url.pathname === '/api/tts' && req.method === 'POST') {
+        const body = await readBody();
+        const { script, pipelineId } = JSON.parse(body);
+        const result = await stepTTS(script, pipelineId || `tts_${Date.now()}`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: result.success, data: result }));
+      }
+
       // 404
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'Not found', endpoints: [
         'POST /api/pipeline              # 完整管线（无审核）',
-        'POST /api/pipeline-with-review  # 带审核管线（审核点1）',
+        'POST /api/pipeline-with-review  # 带审核管线（审核点1→2→3 级联）',
         'POST /api/topic-analysis        # 单独选题分析',
         'POST /api/script-gen             # 单独脚本生成',
         'POST /api/metadata               # 单独元数据生成',
+        'POST /api/tts                    # 单独 TTS 配音生成',
+        'POST /api/render                 # 独立渲染管线（含 QC + 重试）',
         'GET  /api/review/:id             # 查询审核状态',
-        'POST /api/review/:id/approve     # 审核通过',
+        'POST /api/review/:id/approve     # 审核通过（自动级联到下一阶段）',
         'POST /api/review/:id/reject      # 审核打回',
         'GET  /health                     # 健康检查',
       ]}));
