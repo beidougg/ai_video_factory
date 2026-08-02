@@ -16,7 +16,7 @@
 | T0.4 | 申请 DeepSeek API Key（官网注册） | M1 | API 调用返回 200，验证余额可用 | 无 | ✅ 完成（Model: deepseek-v4-flash，API 调用验证通过） |
 | T0.5 | 安装 Node.js ≥ 18 + FFmpeg ≥ 5.0 + Python 3（edge-tts） | M3, M4 | 命令行 `node -v`, `ffmpeg -version`, `edge-tts --help` 正常输出 | 无 | ✅ 完成（Node.js v22, FFmpeg 6.1.1, edge-tts 7.2.8 via `python -m edge_tts`） |
 | T0.6 | 创建 `e:\code\ai_video_factory\` 目录结构（按 plan.md §4） | 全局 | 所有目录存在且可读写 | 无 | ✅ 完成（14 个目录已创建） |
-| T0.7 | 初始化 Git 仓库 + 提交 constitution.md + specs/ | 全局 | `git log` 显示初始提交 | 无 | ⬜ 待做（系统未安装 Git，需先安装 Git for Windows） |
+| T0.7 | 初始化 Git 仓库 + 提交 constitution.md + specs/ | 全局 | `git log` 显示初始提交 | 无 | ✅ 完成（Git 2.53.0 原生可用，2 次提交，37 个文件） |
 
 ---
 
@@ -82,9 +82,9 @@
 
 | Phase | 完成 | 待做 | 需用户操作 |
 |-------|------|------|-----------|
-| Phase 0 基础设施 | 6/7 | T0.7（Git） | Git 安装 |
+| Phase 0 基础设施 | 7/7 | — | — |
 | Phase 1 内容生产 | 8/10 | T1.6, T1.8, T1.9 | 素材收集 |
 | Phase 2 视频渲染 | 2/6 | T2.2, T2.3, T2.5, T2.6 | npm install Remotion |
 | Phase 3 分发回收 | 1/8 | T3.1-3.8（除 T3.3） | GCP + 快手注册 |
 | Phase 4 优化稳定 | 4/6 | T4.3, T4.4（可选） | 无 |
-| **总计** | **21/37** | | |
+| **总计** | **22/37** | | |
