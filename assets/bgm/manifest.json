@@ -1,0 +1,51 @@
+{
+  "generatedAt": "2026-08-30T12:46:43.687Z",
+  "source": "AI 合成原创音乐（无第三方版权，可商用）",
+  "bgms": [
+    {
+      "id": "bright_upbeat",
+      "name": "明亮欢快",
+      "bpm": 120,
+      "duration": 16,
+      "file": "bright_upbeat.mp3",
+      "license": "AI 合成原创，可商用（无第三方版权）",
+      "mood": "明亮欢快"
+    },
+    {
+      "id": "warm_ambient",
+      "name": "温暖舒缓",
+      "bpm": 72,
+      "duration": 32,
+      "file": "warm_ambient.mp3",
+      "license": "AI 合成原创，可商用（无第三方版权）",
+      "mood": "温暖舒缓"
+    },
+    {
+      "id": "tech_future",
+      "name": "科技未来",
+      "bpm": 100,
+      "duration": 16,
+      "file": "tech_future.mp3",
+      "license": "AI 合成原创，可商用（无第三方版权）",
+      "mood": "科技未来"
+    },
+    {
+      "id": "cheerful_playful",
+      "name": "活泼俏皮",
+      "bpm": 132,
+      "duration": 16,
+      "file": "cheerful_playful.mp3",
+      "license": "AI 合成原创，可商用（无第三方版权）",
+      "mood": "活泼俏皮"
+    },
+    {
+      "id": "epic_inspire",
+      "name": "大气励志",
+      "bpm": 88,
+      "duration": 32,
+      "file": "epic_inspire.mp3",
+      "license": "AI 合成原创，可商用（无第三方版权）",
+      "mood": "大气励志"
+    }
+  ]
+}

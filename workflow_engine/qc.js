@@ -10,6 +10,7 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { ffprobe } = require('./ffmpeg');
 
 // 目标参数
 const TARGET = {
@@ -31,7 +32,7 @@ function probeVideo(filePath) {
   }
 
   const output = execSync(
-    `ffprobe -v quiet -print_format json -show_format -show_streams "${filePath}"`,
+    `"${ffprobe}" -v quiet -print_format json -show_format -show_streams "${filePath}"`,
     { timeout: 15000, encoding: 'utf-8' }
   );
 
@@ -107,11 +108,13 @@ function runQC(filePath, expectedDuration = null) {
   const checks = {};
   let passed = true;
 
-  // 1. 分辨率检查
+  // 1. 分辨率检查（支持横屏 16:9 与竖屏 9:16）
+  const shortEdge = Math.min(info.width, info.height);
+  const longEdge = Math.max(info.width, info.height);
   checks.resolution = {
-    expected: TARGET.resolution,
+    expected: '横屏≥1280x720 或 竖屏≥720x1280',
     actual: info.resolution,
-    passed: info.width >= TARGET.min_width && info.height >= TARGET.min_height,
+    passed: shortEdge >= TARGET.min_height && longEdge >= TARGET.min_width,
   };
   if (!checks.resolution.passed) passed = false;
 

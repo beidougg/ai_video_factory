@@ -1,0 +1,67 @@
+{
+  "version": "1.0.0",
+  "templates": [
+    {
+      "id": "animation_knowledge",
+      "name": "动画科普模板（横屏）",
+      "description": "色彩丰富的知识科普风格，带渐变背景和粒子特效，适合教育类内容",
+      "entry": "templates/animation_knowledge/src/index.tsx",
+      "compositionId": "AnimationKnowledge",
+      "orientation": "landscape",
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "fps": 30,
+      "defaultDuration": 90,
+      "features": ["gradient_background", "particle_effects", "scene_animations", "title_card"],
+      "recommendedPlatforms": ["youtube", "bilibili"],
+      "tags": ["knowledge", "education", "animation"]
+    },
+    {
+      "id": "animation_knowledge_portrait",
+      "name": "动画科普模板（竖屏）",
+      "description": "动画科普风格的竖屏 9:16 版本，适用于抖音/快手/小红书等平台",
+      "entry": "templates/animation_knowledge_portrait/src/index.tsx",
+      "compositionId": "AnimationKnowledgePortrait",
+      "orientation": "portrait",
+      "dimensions": {
+        "width": 1080,
+        "height": 1920
+      },
+      "fps": 30,
+      "defaultDuration": 90,
+      "features": ["gradient_background", "particle_effects", "scene_animations", "title_card", "mobile_optimized"],
+      "recommendedPlatforms": ["douyin", "kuaishou", "xiaohongshu"],
+      "tags": ["knowledge", "education", "animation", "portrait", "9:16"]
+    },
+    {
+      "id": "product_showcase",
+      "name": "产品展示模板（横屏）",
+      "description": "简洁专业的产品展示风格，适合电商/产品介绍类内容",
+      "entry": "templates/product_showcase/src/index.tsx",
+      "compositionId": "ProductShowcase",
+      "orientation": "landscape",
+      "dimensions": {
+        "width": 1920,
+        "height": 1080
+      },
+      "fps": 30,
+      "defaultDuration": 60,
+      "features": ["clean_layout", "product_focus", "text_overlay"],
+      "recommendedPlatforms": ["youtube", "bilibili"],
+      "tags": ["product", "ecommerce", "showcase"]
+    }
+  ],
+  "defaults": {
+    "landscape": "animation_knowledge",
+    "portrait": "animation_knowledge_portrait"
+  },
+  "platformMapping": {
+    "youtube": "landscape",
+    "bilibili": "landscape",
+    "douyin": "portrait",
+    "xiaohongshu": "portrait",
+    "kuaishou": "portrait"
+  }
+}

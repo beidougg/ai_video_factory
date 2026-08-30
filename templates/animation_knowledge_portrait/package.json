@@ -1,0 +1,16 @@
+{
+  "name": "animation-knowledge-portrait-template",
+  "version": "1.0.0",
+  "description": "Remotion 动画科普风格模板 - 竖屏 9:16 版本，适用于抖音/快手/小红书",
+  "scripts": {
+    "start": "npx remotion preview src/index.tsx",
+    "build": "npx remotion render src/index.tsx out/animation_knowledge_portrait.mp4"
+  },
+  "dependencies": {
+    "@remotion/cli": "^4.x",
+    "@remotion/renderer": "^4.x",
+    "react": "^18.x",
+    "react-dom": "^18.x",
+    "remotion": "^4.x"
+  }
+}

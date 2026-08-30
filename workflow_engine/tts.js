@@ -10,8 +10,13 @@
 const { execSync, exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { generateWordVTT, aggregateWords, MAX_CHARS } = require('./word_subtitles');
 
-const OUTPUT_DIR = path.resolve(__dirname, '..', 'outputs');
+const PROJECT_DIR = path.resolve(__dirname, '..');
+const OUTPUT_DIR = path.join(PROJECT_DIR, 'outputs');
+// edge-tts 词级 TTS 脚本与依赖目录（O3.2）
+const WORD_TTS_SCRIPT = path.join(PROJECT_DIR, 'scripts', 'edge_tts_word.py');
+const PYLIB_DIR = path.join(PROJECT_DIR, '.pylibs');
 
 /**
  * 递归查找包含 scenes 数组的对象
@@ -55,33 +60,33 @@ async function generateVoice(script, outDir) {
     });
   }
 
-  // 2. 用 edge-tts 生成 MP3 + 字幕文件
-  const vttPath = path.join(dir, 'subtitles.vtt');
-  const mp3Path = path.join(dir, 'voice.mp3');
+  // 2. 写文本文件（避免命令行长度限制）
+  const textPath = path.join(dir, 'text.txt');
+  fs.writeFileSync(textPath, fullText, 'utf-8');
 
+  // 3. 用 edge-tts 词级模式生成 voice.mp3 + words.json（O3.2）
+  const mp3Path = path.join(dir, 'voice.mp3');
+  const wordsPath = path.join(dir, 'words.json');
+  console.log(`   生成词级配音: ${mp3Path}`);
   try {
-    console.log(`   生成配音: ${mp3Path}`);
     execSync(
-      `python -m edge_tts --voice zh-CN-XiaoxiaoNeural --rate "+10%" --text "${fullText.replace(/"/g, '\\"').replace(/\n/g, ' ')}" --write-media "${mp3Path}" --write-subtitles "${vttPath}"`,
-      { timeout: 30000, stdio: 'pipe' }
+      `python "${WORD_TTS_SCRIPT}" --file "${textPath}" --out-mp3 "${mp3Path}" --out-words "${wordsPath}"`,
+      { env: { ...process.env, PYTHONPATH: PYLIB_DIR }, timeout: 60000, stdio: 'pipe' }
     );
   } catch (err) {
-    // 备用: 写文本文件再读
-    const textPath = path.join(dir, 'text.txt');
-    fs.writeFileSync(textPath, fullText, 'utf-8');
-    execSync(
-      `python -m edge_tts --voice zh-CN-XiaoxiaoNeural --rate "+10%" -f "${textPath}" --write-media "${mp3Path}" --write-subtitles "${vttPath}"`,
-      { timeout: 30000, stdio: 'pipe' }
-    );
+    throw new Error(`edge-tts 词级 TTS 失败: ${err.message}`);
   }
 
-  // 3. 解析 VTT 字幕获取时间戳
-  const timestamps = parseVTT(vttPath);
+  // 4. 读词级时间戳，聚合生成逐字字幕 VTT
+  const words = (JSON.parse(fs.readFileSync(wordsPath, 'utf-8')).words || []);
+  const vttPath = path.join(dir, 'subtitles.vtt');
+  fs.writeFileSync(vttPath, generateWordVTT(words, MAX_CHARS), 'utf-8');
 
-  // 4. 将时间戳与分镜对齐
-  const alignedScenes = alignWithScenes(timestamps, segments);
+  // 5. 分镜对齐（词级总时长 + 字符比例分配）
+  const totalDuration = words.length > 0 ? words[words.length - 1].end : segments.length * 5;
+  const alignedScenes = alignSegmentsByDuration(segments, totalDuration);
 
-  // 5. 保存时间戳 JSON
+  // 6. 保存时间戳 JSON
   const tsPath = path.join(dir, 'timestamps.json');
   fs.writeFileSync(tsPath, JSON.stringify(alignedScenes, null, 2), 'utf-8');
 
@@ -173,6 +178,31 @@ function alignWithScenes(cues, segments) {
     seg.start = Math.round(start * 10) / 10;
     seg.end = Math.round((start + seg.duration) * 10) / 10;
     return seg;
+  });
+}
+
+/**
+ * 按字符比例将分镜对齐到总时长 (O3.2)
+ * @param {Array} segments - [{ index, text }]
+ * @param {number} totalDuration - 语音总时长（秒）
+ */
+function alignSegmentsByDuration(segments, totalDuration) {
+  if (!segments.length) return [];
+  const totalChars = segments.reduce((sum, s) => sum + s.text.length, 0) || 1;
+
+  let cursor = 0;
+  return segments.map((seg) => {
+    const duration = Math.max(1, totalDuration * (seg.text.length / totalChars));
+    const start = Math.round(cursor * 10) / 10;
+    const end = Math.round((cursor + duration) * 10) / 10;
+    cursor += duration;
+    return {
+      index: seg.index,
+      text: seg.text,
+      start,
+      end,
+      duration: Math.round(duration * 10) / 10,
+    };
   });
 }
 

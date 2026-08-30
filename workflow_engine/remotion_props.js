@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { resolveTemplate } = require('./render');
 
 const PROJECT_DIR = path.resolve(__dirname, '..');
 const OUTPUT_DIR = path.join(PROJECT_DIR, 'outputs');
@@ -25,6 +26,43 @@ const CONFIG = {
     backgroundColor: 'rgba(0,0,0,0.55)',
   },
 };
+
+/**
+ * 根据 options 解析模板（O1.3）
+ * 若指定 platform，则自动映射到对应方向的默认模板及尺寸
+ * @returns {{ template: string, width: number, height: number, orientation: string }}
+ */
+function resolveTemplateOptions(options = {}) {
+  // 无 platform 时用显式模板或默认横屏
+  if (!options.platform && !options.orientation) {
+    return {
+      template: options.template || 'product_showcase',
+      width: options.width || CONFIG.width,
+      height: options.height || CONFIG.height,
+      orientation: 'landscape',
+    };
+  }
+
+  // 有 platform/orientation 时走注册表解析
+  try {
+    const tpl = resolveTemplate({ template: options.template, platform: options.platform, orientation: options.orientation });
+    return {
+      template: tpl.id,
+      width: options.width || tpl.dimensions.width,
+      height: options.height || tpl.dimensions.height,
+      orientation: tpl.orientation,
+    };
+  } catch (e) {
+    // 注册表缺失时回退到默认
+    console.warn(`⚠️ 模板解析失败，使用默认横屏: ${e.message}`);
+    return {
+      template: options.template || 'product_showcase',
+      width: options.width || CONFIG.width,
+      height: options.height || CONFIG.height,
+      orientation: 'landscape',
+    };
+  }
+}
 
 // ============ 工具函数 ============
 /**
@@ -119,18 +157,26 @@ function generateProps(scriptData, assetResults = null, audioSrc = null, options
     }));
   }
 
-  // 4. 构建 props
+  // 4. 解析模板及尺寸（O1.3：支持 platform 自动映射横/竖屏）
+  const tplOptions = resolveTemplateOptions(options);
+
+  // 5. 构建 props
   const totalDuration = scenes.reduce((sum, s) => sum + s.duration, 0);
 
   return {
     // Remotion 渲染参数
     durationInFrames: Math.ceil(totalDuration * CONFIG.fps),
     fps: CONFIG.fps,
-    width: options.width || CONFIG.width,
-    height: options.height || CONFIG.height,
+    width: tplOptions.width,
+    height: tplOptions.height,
 
     // 模板名称
-    template: options.template || 'product_showcase',
+    template: tplOptions.template,
+    // 平台/方向（供 render.js 解析模板用）
+    ...(options.platform ? { platform: options.platform } : {}),
+    ...(options.orientation ? { orientation: options.orientation } : {}),
+    // BGM（供 render.js 混音用，O2.2）
+    ...(options.bgm ? { bgm: options.bgm } : {}),
 
     // props 传递给组件
     props: {

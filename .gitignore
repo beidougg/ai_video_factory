@@ -7,6 +7,9 @@
 # 依赖
 node_modules/
 
+# Python 依赖（edge-tts 等，装在项目内）
+.pylibs/
+
 # n8n 数据库
 ~/.n8n/
 

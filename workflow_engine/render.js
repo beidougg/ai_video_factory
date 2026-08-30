@@ -12,10 +12,69 @@ const { execSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { runQC } = require('./qc');
+const { mixBGM } = require('./bgm');
+const { ffmpeg } = require('./ffmpeg');
 
 const PROJECT_DIR = path.resolve(__dirname, '..');
 const OUTPUT_DIR = path.join(PROJECT_DIR, 'outputs');
 const MAX_RETRIES = 2; // T2.5: 最多重试 2 次
+
+// ============ 模板注册表 (O1.3) ============
+const REGISTRY_PATH = path.join(PROJECT_DIR, 'templates', 'registry.json');
+
+/**
+ * 加载模板注册表
+ */
+function loadRegistry() {
+  if (!fs.existsSync(REGISTRY_PATH)) {
+    throw new Error(`模板注册表不存在: ${REGISTRY_PATH}`);
+  }
+  return JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
+}
+
+/**
+ * 根据渲染数据解析目标模板 (O1.3)
+ * 优先级: 显式 template > platform 映射 > orientation > 默认横屏
+ * @param {Object} renderData - 渲染数据（含 template/platform/orientation 字段）
+ * @returns {Object} 模板对象（含 id/entry/compositionId/dimensions/orientation）
+ */
+function resolveTemplate(renderData = {}) {
+  const registry = loadRegistry();
+  const templates = registry.templates || [];
+  const byId = Object.fromEntries(templates.map(t => [t.id, t]));
+
+  let templateId = null;
+
+  // 1. 显式指定模板 ID
+  if (renderData.template && byId[renderData.template]) {
+    templateId = renderData.template;
+  }
+
+  // 2. platform → orientation → 默认模板
+  if (!templateId && renderData.platform) {
+    const orientation = registry.platformMapping?.[renderData.platform];
+    if (orientation) {
+      templateId = registry.defaults?.[orientation];
+    }
+  }
+
+  // 3. 直接指定 orientation
+  if (!templateId && renderData.orientation) {
+    templateId = registry.defaults?.[renderData.orientation];
+  }
+
+  // 4. 兜底：默认横屏
+  if (!templateId) {
+    templateId = registry.defaults?.landscape;
+  }
+
+  const template = byId[templateId];
+  if (!template) {
+    throw new Error(`无法解析模板 (template=${renderData.template}, platform=${renderData.platform}, orientation=${renderData.orientation})`);
+  }
+
+  return template;
+}
 
 // ============ 配置 ============
 const CONFIG = {
@@ -45,6 +104,8 @@ const CONFIG = {
  * 查找 props 数据 (兼容目录或文件)
  */
 function loadRenderData(inputPath) {
+  // 规范化为绝对路径，避免渲染时 cwd 在模板目录导致相对路径失效
+  inputPath = path.resolve(inputPath);
   let renderJsonPath, propsDir;
 
   if (fs.statSync(inputPath).isDirectory()) {
@@ -105,15 +166,20 @@ function formatVTTTime(seconds) {
  * @returns {{ success: boolean, outputFile: string, duration: number }}
  */
 async function stepRemotionRender(propsDir, renderData, attempt = 1) {
-  const templateName = renderData.template || 'animation_knowledge';
-  const templateDir = path.join(PROJECT_DIR, 'templates', templateName);
+  // O1.3: 通过注册表解析模板（支持 platform 自动映射横/竖屏）
+  const template = resolveTemplate(renderData);
+  const templateName = template.id;
+  // entry 形如 "templates/xxx/src/index.tsx"，模板目录为去掉 "/src/index.tsx" 的部分
+  const entryRelative = template.entry.replace(/^templates\//, ''); // "xxx/src/index.tsx"
+  const templateDir = path.join(PROJECT_DIR, 'templates', entryRelative.split('/')[0]);
   if (!fs.existsSync(templateDir)) {
     throw new Error(`模板目录不存在: ${templateDir}`);
   }
-  const entry = 'src/index.tsx'; // 相对于 templateDir 的路径
+  const entry = entryRelative.split('/').slice(1).join('/') || 'src/index.tsx'; // 相对 templateDir
+  const compositionId = template.compositionId;
   const tempOutput = path.join(propsDir, `raw_${attempt}.mp4`);
 
-  console.log(`   🎬 Remotion 渲染 (尝试 #${attempt})...`);
+  console.log(`   🎬 Remotion 渲染 (尝试 #${attempt}, 模板=${templateName}, 方向=${template.orientation})...`);
 
   // 将 props 写入临时文件
   const propsJson = path.join(propsDir, 'props.json');
@@ -123,8 +189,19 @@ async function stepRemotionRender(propsDir, renderData, attempt = 1) {
   const publicDir = path.join(templateDir, 'public');
   if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
   if (props.audioSrc && fs.existsSync(props.audioSrc)) {
+    let finalAudio = props.audioSrc;
+    // O2.2: 若渲染数据指定 BGM，先混音（音量 30% + 淡入淡出）
+    if (renderData.bgm) {
+      const mixedAudio = path.join(propsDir, 'voice_mixed.mp3');
+      try {
+        mixBGM(props.audioSrc, renderData.bgm, mixedAudio);
+        finalAudio = mixedAudio;
+      } catch (e) {
+        console.warn(`   ⚠️ BGM 混音失败，使用原语音: ${e.message}`);
+      }
+    }
     const destAudio = path.join(publicDir, '_voice.mp3');
-    fs.copyFileSync(props.audioSrc, destAudio);
+    fs.copyFileSync(finalAudio, destAudio);
     props.audioSrc = '_voice.mp3';  // Remotion staticFile 相对路径
     console.log(`   🎵 音频已复制到 public/: ${destAudio}`);
   }
@@ -134,7 +211,7 @@ async function stepRemotionRender(propsDir, renderData, attempt = 1) {
   const args = [
     'npx', 'remotion', 'render',
     entry,
-    'AnimationKnowledge',  // composition ID (位置参数)
+    compositionId,  // composition ID (位置参数，来自注册表)
     tempOutput,
     `--props=${propsJson}`,
     `--fps=${renderData.fps || CONFIG.remotion.fps}`,
@@ -176,7 +253,7 @@ function stepFFmpegBurnSubtitles(rawVideo, subtitlesPath, outputFile) {
   if (fs.existsSync(vttFile)) {
     try {
       execSync(
-        `ffmpeg -y -i "${rawVideo}" -vf "subtitles=${path.basename(vttFile)}:force_style='FontName=${CONFIG.ffmpeg.fontName},FontSize=${CONFIG.ffmpeg.fontSize},PrimaryColour=${CONFIG.ffmpeg.primaryColor},OutlineColour=${CONFIG.ffmpeg.outlineColor},Alignment=${CONFIG.ffmpeg.alignment}'" -c:a copy "${outputFile}"`,
+        `"${ffmpeg}" -y -i "${rawVideo}" -vf "subtitles=${path.basename(vttFile)}:force_style='FontName=${CONFIG.ffmpeg.fontName},FontSize=${CONFIG.ffmpeg.fontSize},PrimaryColour=${CONFIG.ffmpeg.primaryColor},OutlineColour=${CONFIG.ffmpeg.outlineColor},Alignment=${CONFIG.ffmpeg.alignment}'" -c:a copy "${outputFile}"`,
         { cwd: path.dirname(vttFile), stdio: 'inherit', timeout: 300000 }
       );
       console.log(`   ✅ 字幕已烧录: ${outputFile}`);
@@ -225,7 +302,8 @@ async function renderPipeline(inputPath, pipelineId = `render_${Date.now()}`) {
   // 1. 加载数据
   console.log('\n📂 加载渲染数据...');
   const { propsDir, data: renderData } = loadRenderData(inputPath);
-  console.log(`   模板: ${renderData.entry || 'product_showcase'}`);
+  const resolvedTemplate = resolveTemplate(renderData);
+  console.log(`   模板: ${resolvedTemplate.id} (${resolvedTemplate.orientation})`);
   console.log(`   分镜: ${renderData.props?.scenes?.length || '?'} 个`);
 
   // 2. 生成 VTT 字幕
@@ -333,4 +411,4 @@ if (require.main === module) {
     });
 }
 
-module.exports = { renderPipeline, loadRenderData, generateVTT, stepRemotionRender, stepQC };
+module.exports = { renderPipeline, loadRenderData, generateVTT, stepRemotionRender, stepQC, resolveTemplate, loadRegistry };
