@@ -17,6 +17,8 @@ const { execSync } = require('child_process');
 const { generateAndSave } = require('./remotion_props');
 const { renderPipeline, generateVTT } = require('./render');
 const { uploadVideo: youtubeUpload, checkAuth: youtubeStatus, startOAuthFlow: youtubeAuth } = require('./youtube');
+const { validateScriptStructure } = require('./script_validator');
+const { getTrendingTopicsSafe } = require('./hot_topics');
 
 // ============ 配置 ============
 const CONFIG = {
@@ -157,10 +159,22 @@ function extractJSON(text) {
 async function stepTopicAnalysis(userIdea) {
   console.log('\n📝 [步骤1] 选题分析中...');
   const startTime = Date.now();
-  
+
+  // O5.2: 获取热点参考（失败降级为空列表，不影响主流程）
+  console.log('   🔥 获取实时热点...');
+  const trending = await getTrendingTopicsSafe();
+  const trendingText = trending.length > 0
+    ? trending.slice(0, 15).map((t, i) => `${i + 1}. ${t.title}`).join('\n')
+    : '（当前无热点数据）';
+
+  const userContent = [
+    `用户创意：${userIdea}`,
+    `\n当前热点参考：\n${trendingText}`,
+  ].join('\n');
+
   const result = await callDeepSeek(
     PROMPTS.topic,
-    `用户创意：${userIdea}`,
+    userContent,
     2000, 0.8
   );
   
@@ -171,9 +185,10 @@ async function stepTopicAnalysis(userIdea) {
   console.log(`✅ 选题分析完成 (${elapsed}s, ${result.usage.total_tokens} tokens)`);
   console.log(`   方向: ${analysis.direction}`);
   console.log(`   时长建议: ${analysis.estimated_duration}s`);
+  console.log(`   热点契合度: ${analysis.hot_match?.score ?? 'N/A'}/100 (${analysis.hot_match?.level ?? 'N/A'})`);
   console.log(`   风险提示: ${analysis.risk_warning}`);
   
-  return { analysis, raw: content, usage: result.usage };
+  return { analysis, raw: content, usage: result.usage, trending };
 }
 
 // ============ 步骤 2: 脚本生成 ============
@@ -186,14 +201,29 @@ async function stepScriptGeneration(topicAnalysis, assetTags) {
     `\n可用素材标签索引：${assetTags.join(', ')}`
   ].join('\n');
   
-  const result = await callDeepSeek(
-    PROMPTS.script,
-    userContent,
-    4000, 0.8
-  );
-  
-  const content = result.choices[0].message.content;
-  const script = extractJSON(content);
+  // O4.2: 生成后执行四段式结构校验，失败自动重试 1 次
+  let result;
+  let script;
+  let lastErrors = [];
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const prompt = PROMPTS.script + (attempt === 2 && lastErrors.length > 0
+      ? `\n\n## 上次生成未通过结构校验，错误如下，请修正后重新生成：\n${lastErrors.join('\n')}`
+      : '');
+
+    result = await callDeepSeek(prompt, userContent, 4000, 0.8);
+    const content = result.choices[0].message.content;
+    script = extractJSON(content);
+
+    const validation = validateScriptStructure(script);
+    if (validation.passed) {
+      console.log(`   ✅ 四段式结构校验通过`);
+      break;
+    }
+    lastErrors = validation.errors;
+    console.warn(`   ⚠️ 四段式结构校验未通过 (尝试 ${attempt}): ${validation.errors.join('; ')}`);
+  }
+
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   
   console.log(`✅ 脚本生成完成 (${elapsed}s, ${result.usage.total_tokens} tokens)`);
@@ -202,7 +232,8 @@ async function stepScriptGeneration(topicAnalysis, assetTags) {
   console.log(`   分镜数: ${script.scenes.length}`);
   console.log(`   钩子: ${script.hook}`);
   
-  return { script, raw: content, usage: result.usage };
+  const validation = validateScriptStructure(script);
+  return { script, raw: result.choices[0].message.content, usage: result.usage, structureValid: validation.passed, structureErrors: validation.errors };
 }
 
 // ============ 步骤 3: 元数据生成 ============
