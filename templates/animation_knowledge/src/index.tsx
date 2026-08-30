@@ -17,6 +17,7 @@ import {
   interpolate,
   spring,
   AbsoluteFill,
+  staticFile,
 } from 'remotion';
 
 // ============ 类型 ============
@@ -491,7 +492,7 @@ export const AnimationKnowledge: React.FC<VideoProps> = ({
   subtitleStyle = {},
 }) => {
   const { fps, width, height } = useVideoConfig();
-  const totalDuration = scenes.reduce((sum, s) => sum + (s.duration || 5), 0);
+  const totalDuration = Math.max(1, scenes.reduce((sum, s) => sum + (s.duration || 5), 0));
 
   return (
     <div
@@ -505,7 +506,7 @@ export const AnimationKnowledge: React.FC<VideoProps> = ({
       }}
     >
       {/* 音频轨道 */}
-      {audioSrc && <Audio src={audioSrc} />}
+      {audioSrc && <Audio src={staticFile(audioSrc)} />}
 
       {/* 开场 */}
       {title && <Intro title={title} themeIndex={0} />}
@@ -532,6 +533,21 @@ export const AnimationKnowledge: React.FC<VideoProps> = ({
 // 默认导出
 export default AnimationKnowledge;
 
-// 注册
-import { registerRoot } from 'remotion';
-registerRoot(AnimationKnowledge);
+// ============ Remotion 注册 ============
+import { registerRoot, Composition } from 'remotion';
+
+const RemotionRoot: React.FC = () => {
+  return (
+    <Composition
+      id="AnimationKnowledge"
+      component={AnimationKnowledge}
+      durationInFrames={3000}
+      fps={30}
+      width={1920}
+      height={1080}
+      defaultProps={{ scenes: [], audioSrc: '', title: '' }}
+    />
+  );
+};
+
+registerRoot(RemotionRoot);

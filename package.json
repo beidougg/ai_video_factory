@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/beidougg/ai_video_factory#readme",
   "dependencies": {
+    "https-proxy-agent": "^9.1.0",
     "isomorphic-git": "^1.40.0"
   }
 }

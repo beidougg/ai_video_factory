@@ -26,7 +26,7 @@ const CONFIG = {
     crf: 23,
     quality: 'high',
     pixelFormat: 'yuv420p',
-    timeout: 600000, // 10 分钟超时
+    timeout: 1800000, // 30 分钟超时（首次需下载 Chrome Headless Shell ~113MB）
   },
   // FFmpeg 字幕合成参数
   ffmpeg: {
@@ -105,23 +105,36 @@ function formatVTTTime(seconds) {
  * @returns {{ success: boolean, outputFile: string, duration: number }}
  */
 async function stepRemotionRender(propsDir, renderData, attempt = 1) {
-  const entry = renderData.entry || 'templates/product_showcase/src/index.tsx';
-  const entryPath = path.join(PROJECT_DIR, entry);
+  const templateName = renderData.template || 'animation_knowledge';
+  const templateDir = path.join(PROJECT_DIR, 'templates', templateName);
+  if (!fs.existsSync(templateDir)) {
+    throw new Error(`模板目录不存在: ${templateDir}`);
+  }
+  const entry = 'src/index.tsx'; // 相对于 templateDir 的路径
   const tempOutput = path.join(propsDir, `raw_${attempt}.mp4`);
 
   console.log(`   🎬 Remotion 渲染 (尝试 #${attempt})...`);
 
   // 将 props 写入临时文件
   const propsJson = path.join(propsDir, 'props.json');
-  const props = {
-    ...(renderData.props || renderData),
-    // Remotion 根参数
-  };
+  const props = { ...(renderData.props || renderData) };
+
+  // 将音频文件复制到 Remotion 模板的 public/ 目录
+  const publicDir = path.join(templateDir, 'public');
+  if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+  if (props.audioSrc && fs.existsSync(props.audioSrc)) {
+    const destAudio = path.join(publicDir, '_voice.mp3');
+    fs.copyFileSync(props.audioSrc, destAudio);
+    props.audioSrc = '_voice.mp3';  // Remotion staticFile 相对路径
+    console.log(`   🎵 音频已复制到 public/: ${destAudio}`);
+  }
+  
   fs.writeFileSync(propsJson, JSON.stringify(props, null, 2), 'utf-8');
 
   const args = [
     'npx', 'remotion', 'render',
     entry,
+    'AnimationKnowledge',  // composition ID (位置参数)
     tempOutput,
     `--props=${propsJson}`,
     `--fps=${renderData.fps || CONFIG.remotion.fps}`,
@@ -129,16 +142,15 @@ async function stepRemotionRender(propsDir, renderData, attempt = 1) {
     `--pixel-format=${CONFIG.remotion.pixelFormat}`,
   ];
 
-  // 如果有 duration (frames 或 seconds)
-  if (renderData.durationInFrames) {
-    args.push(`--frames=${renderData.durationInFrames}`);
-  }
+  // 使用 durationInFrames 指定视频长度（Remotion 需要 --duration-in-frames）
+  const totalFrames = renderData.durationInFrames || 2100;
+  args.push(`--duration-in-frames=${totalFrames}`);
 
   const startTime = Date.now();
 
   try {
     execSync(args.join(' '), {
-      cwd: path.join(PROJECT_DIR, 'templates/product_showcase'),
+      cwd: templateDir,
       timeout: CONFIG.remotion.timeout,
       stdio: 'inherit',
     });

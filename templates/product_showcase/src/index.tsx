@@ -175,5 +175,20 @@ export const ProductShowcase: React.FC<VideoProps> = ({
 export default ProductShowcase;
 
 // 注册为 Remotion 可渲染组件
-import { registerRoot } from 'remotion';
-registerRoot(ProductShowcase);
+import { registerRoot, Composition } from 'remotion';
+
+const RemotionRoot: React.FC = () => {
+  return (
+    <Composition
+      id="ProductShowcase"
+      component={ProductShowcase}
+      durationInFrames={3000}
+      fps={30}
+      width={1920}
+      height={1080}
+      defaultProps={{ scenes: [], audioSrc: '' }}
+    />
+  );
+};
+
+registerRoot(RemotionRoot);

@@ -15,9 +15,15 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const PROJECT_DIR = path.resolve(__dirname, '..');
 const TOKEN_FILE = path.join(PROJECT_DIR, '.youtube_token.json');
+
+// ============ 代理配置 (解决国内访问 Google 超时) ============
+const PROXY_URL = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || 'http://127.0.0.1:7897';
+const proxyAgent = new HttpsProxyAgent(PROXY_URL);
+console.log(`   🔗 使用代理: ${PROXY_URL}`);
 
 // ============ 配置 ============
 const CONFIG = {
@@ -193,6 +199,7 @@ function exchangeCodeForToken(code) {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Content-Length': Buffer.byteLength(postData),
       },
+      agent: proxyAgent,  // 使用代理
     };
 
     const req = https.request(options, (res) => {
@@ -239,6 +246,7 @@ function refreshAccessToken(refreshToken) {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Content-Length': Buffer.byteLength(postData),
       },
+      agent: proxyAgent,  // 使用代理
     };
 
     const req = https.request(options, (res) => {
@@ -371,6 +379,7 @@ function initiateResumableUpload(accessToken, metadata, fileSize) {
         'X-Upload-Content-Type': 'video/*',
         'X-Upload-Content-Length': fileSize,
       },
+      agent: proxyAgent,  // 使用代理
     };
 
     const req = https.request(options, (res) => {
@@ -418,6 +427,7 @@ function uploadFileChunks(uploadUrl, videoFile, fileSize, accessToken) {
           'Content-Length': chunk.length,
           'Content-Range': contentRange,
         },
+        agent: proxyAgent,  // 使用代理
       };
 
       const req = https.request(options, (res) => {

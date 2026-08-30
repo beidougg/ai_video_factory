@@ -357,54 +357,127 @@ async function stepRenderWithReview(pipelineId, script, ttsResult, assetResult) 
 }
 
 // ============ 完整管线汇总 ============
-async function runFullPipeline(userIdea) {
-  const pipelineId = `pipe_${Date.now()}`;
+async function runFullPipeline(userIdea, options = {}) {
+  const pipelineId = options.pipelineId || `pipe_${Date.now()}`;
+  const skipTTS = options.skipTTS || false;
+  const skipRender = options.skipRender || false;
+  
   console.log('='.repeat(60));
-  console.log(`🚀 AI Video Factory 完整管线测试`);
+  console.log(`🚀 AI Video Factory 完整管线`);
   console.log(`   Pipeline ID: ${pipelineId}`);
   console.log(`   创意: ${userIdea}`);
   console.log('='.repeat(60));
   
-  const results = { pipelineId, userIdea, startTime: new Date().toISOString() };
+  const results = { pipelineId, userIdea, startTime: new Date().toISOString(), steps: [] };
+  const pipeStartTime = Date.now();
   
   try {
-    // Step 1
+    // Step 1: 选题分析
+    console.log('\n📝 [步骤1/7] 选题分析...');
     const topicResult = await stepTopicAnalysis(userIdea);
     results.topicAnalysis = topicResult;
+    results.steps.push({ name: 'topic_analysis', tokens: topicResult.usage?.total_tokens || 0, ok: true });
     
-    // Step 2
-    const assetTags = ['产品展示', '科技感界面', '医疗场景', '实验室', '数据可视化', '人物访谈', '街头访问', '动画演示', '场景展示', '产品特写', '俯拍'];
+    // Step 2: 脚本生成
+    console.log('\n✍️ [步骤2/7] 脚本生成...');
+    const assetTags = ['产品展示', '科技感界面', '医疗场景', '实验室', '数据可视化', '动画演示', '场景展示'];
     const scriptResult = await stepScriptGeneration(topicResult.analysis, assetTags);
     results.script = scriptResult;
+    results.steps.push({ name: 'script_gen', tokens: scriptResult.usage?.total_tokens || 0, ok: true });
     
-    // Step 3
+    // Step 3: 元数据生成
+    console.log('\n🏷️ [步骤3/7] 元数据生成...');
     const videoInfo = {
-      resolution: '1920x1080',
-      fps: 30,
-      codec: 'h264',
+      resolution: '1920x1080', fps: 30, codec: 'h264',
       duration: scriptResult.script.total_duration || 60,
     };
     const metadataResult = await stepMetadataGeneration(scriptResult.script, videoInfo);
     results.metadata = metadataResult;
+    results.steps.push({ name: 'metadata_gen', tokens: metadataResult.usage?.total_tokens || 0, ok: true });
+    
+    // Step 4: TTS 配音 (可跳过)
+    if (!skipTTS) {
+      console.log('\n🔊 [步骤4/7] TTS 配音生成...');
+      const ttsResult = await stepTTS(scriptResult.script, pipelineId);
+      results.tts = ttsResult;
+      results.steps.push({ name: 'tts', tokens: 0, ok: ttsResult.success });
+      if (!ttsResult.success) {
+        console.warn('   ⚠️ TTS 失败，继续流程（使用静音音频）');
+      }
+    } else {
+      results.tts = { success: false, error: '已跳过' };
+      results.steps.push({ name: 'tts', tokens: 0, ok: false, skip: true });
+    }
+    
+    // Step 5: 素材检索
+    console.log('\n🔍 [步骤5/7] 素材检索...');
+    const assetResult = await stepAssetSearch(scriptResult.script, pipelineId);
+    results.assetSearch = assetResult;
+    results.steps.push({ name: 'asset_search', tokens: 0, ok: assetResult.success });
+    
+    // Step 6: Remotion Props 生成
+    if (!skipRender) {
+      console.log('\n🎬 [步骤6/7] 渲染管线...');
+      const { generateAndSave } = require('./remotion_props');
+      const propsResult = generateAndSave(
+        scriptResult.script,
+        assetResult?.searchResults,
+        results.tts?.voicePath || null,
+        pipelineId,
+        { template: 'animation_knowledge' }
+      );
+      results.props = propsResult;
+      results.steps.push({ name: 'props_gen', tokens: 0, ok: true });
+      
+      // Step 7: 渲染 + 质检
+      console.log('\n🎥 [步骤7/7] 视频渲染 + 质检...');
+      const renderResult = await renderPipeline(propsResult.outDir, pipelineId);
+      results.render = renderResult;
+      results.steps.push({ name: 'render', tokens: 0, ok: renderResult.success });
+    } else {
+      results.steps.push({ name: 'props_gen', tokens: 0, skip: true });
+      results.steps.push({ name: 'render', tokens: 0, skip: true });
+    }
     
     // 汇总
-    const totalTokens = [topicResult.usage, scriptResult.usage, metadataResult.usage]
-      .reduce((sum, u) => sum + u.total_tokens, 0);
-    const totalCost = (totalTokens / 1_000_000 * 1).toFixed(4); // ¥1/百万tokens
+    const totalTokens = results.steps
+      .filter(s => s.tokens > 0)
+      .reduce((sum, s) => sum + s.tokens, 0);
+    const totalCost = (totalTokens / 1_000_000 * 1).toFixed(4);
+    const okSteps = results.steps.filter(s => s.ok).length;
+    const totalSteps = results.steps.filter(s => !s.skip).length;
+    const totalTime = ((Date.now() - pipeStartTime) / 1000).toFixed(1);
     
     console.log('\n' + '='.repeat(60));
     console.log('📊 管线完成汇总');
-    console.log(`   总 Token: ${totalTokens}`);
-    console.log(`   预估费用: ¥${totalCost}`);
-    console.log(`   输出文件: scripts/${pipelineId}_script.json`);
+    console.log(`   步骤: ${okSteps}/${totalSteps} 成功`);
+    console.log(`   耗时: ${totalTime}s`);
+    console.log(`   Token: ${totalTokens} (¥${totalCost})`);
+    if (results.render?.outputFile) {
+      console.log(`   视频: ${results.render.outputFile}`);
+    }
     console.log('='.repeat(60));
     
     // 保存结果
     const outputDir = path.join(CONFIG.PROJECT_DIR, 'scripts');
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+    const resultJson = {
+      pipelineId, userIdea,
+      startTime: results.startTime,
+      totalTime, totalTokens, totalCost,
+      steps: results.steps,
+      topicAnalysis: results.topicAnalysis?.analysis,
+      script: results.script?.script,
+      metadata: results.metadata?.metadata,
+      render: results.render ? {
+        success: results.render.success,
+        outputFile: results.render.outputFile,
+        retries: results.render.retries,
+      } : null,
+    };
     fs.writeFileSync(
       path.join(outputDir, `${pipelineId}_result.json`),
-      JSON.stringify(results, null, 2),
+      JSON.stringify(resultJson, null, 2),
       'utf-8'
     );
     console.log(`\n📁 结果已保存至 scripts/${pipelineId}_result.json`);
@@ -412,6 +485,12 @@ async function runFullPipeline(userIdea) {
     return results;
   } catch (err) {
     console.error(`\n❌ 管线执行失败:`, err.message);
+    const outputDir = path.join(CONFIG.PROJECT_DIR, 'scripts');
+    fs.writeFileSync(
+      path.join(outputDir, `${pipelineId}_error.json`),
+      JSON.stringify({ error: err.message, steps: results.steps }, null, 2),
+      'utf-8'
+    );
     throw err;
   }
 }

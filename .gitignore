@@ -14,6 +14,10 @@ node_modules/
 outputs/*.mp4
 outputs/*.mp3
 outputs/*.vtt
+outputs/pipe_*/
+
+# 渲染临时产物（模板 public 下的配音）
+templates/*/public/_voice.mp3
 
 # 脚本生成结果
 scripts/pipe_*.json
