@@ -25,18 +25,24 @@ const PROXY_URL = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || 'http://1
 const proxyAgent = new HttpsProxyAgent(PROXY_URL);
 console.log(`   🔗 使用代理: ${PROXY_URL}`);
 
-// ============ 配置 ============
+// ============ 配置（密钥从环境变量读取，避免泄露） ============
 const CONFIG = {
-  CLIENT_ID: '496144175330-19e9omgce99fshbscv87s1tfjt4p43bf.apps.googleusercontent.com',
-  CLIENT_SECRET: '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',
-  REDIRECT_URI: 'http://localhost:3000/callback',
-  REDIRECT_PORT: 3000,
+  CLIENT_ID: process.env.YOUTUBE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '',
+  CLIENT_SECRET: process.env.YOUTUBE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '',
+  REDIRECT_URI: process.env.YOUTUBE_REDIRECT_URI || 'http://localhost:3000/callback',
+  REDIRECT_PORT: parseInt(process.env.YOUTUBE_REDIRECT_PORT || '3000', 10),
   SCOPES: [
     'https://www.googleapis.com/auth/youtube.upload',
     'https://www.googleapis.com/auth/youtube.readonly',
   ],
   TOKEN_FILE,
 };
+
+// 启动时检查必要配置
+if (!CONFIG.CLIENT_ID || !CONFIG.CLIENT_SECRET) {
+  console.warn('⚠️  警告：未设置 YOUTUBE_CLIENT_ID/YOUTUBE_CLIENT_SECRET 环境变量，YouTube 功能将不可用');
+  console.warn('   请设置: export YOUTUBE_CLIENT_ID=your_id  和  export YOUTUBE_CLIENT_SECRET=your_secret');
+}
 
 // ============ Token 管理 ============
 

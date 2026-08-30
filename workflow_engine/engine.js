@@ -20,15 +20,21 @@ const { uploadVideo: youtubeUpload, checkAuth: youtubeStatus, startOAuthFlow: yo
 const { validateScriptStructure } = require('./script_validator');
 const { getTrendingTopicsSafe } = require('./hot_topics');
 
-// ============ 配置 ============
+// ============ 配置（密钥从环境变量读取，避免泄露） ============
 const CONFIG = {
   PORT: 5678,
-  DEEPSEEK_API_KEY: 'sk-4a6e00338ce94e15bf9b8a9c79a6119d',
-  DEEPSEEK_BASE_URL: 'https://api.deepseek.com/v1',
-  DEEPSEEK_MODEL: 'deepseek-chat',
-  FEISHU_APP_ID: 'cli_aae46311a3781cee',
+  DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_KEY || '',
+  DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com/v1',
+  DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+  FEISHU_APP_ID: process.env.FEISHU_APP_ID || 'cli_aae46311a3781cee',
   PROJECT_DIR: path.resolve(__dirname, '..'),
 };
+
+// 启动时检查必要配置
+if (!CONFIG.DEEPSEEK_API_KEY) {
+  console.warn('⚠️  警告：未设置 DEEPSEEK_API_KEY 环境变量，DeepSeek 功能将不可用');
+  console.warn('   请设置: export DEEPSEEK_API_KEY=your_key  或  set DEEPSEEK_API_KEY=your_key');
+}
 
 // ============ Prompt 模板加载 ============
 function loadPrompt(name) {
