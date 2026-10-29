@@ -14,11 +14,17 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+
+// 加载 .env 环境变量（必须在读取任何 process.env 配置之前）
+require('./env');
+
 const { generateAndSave } = require('./remotion_props');
 const { renderPipeline, generateVTT } = require('./render');
 const { uploadVideo: youtubeUpload, checkAuth: youtubeStatus, startOAuthFlow: youtubeAuth } = require('./youtube');
 const { validateScriptStructure } = require('./script_validator');
 const { getTrendingTopicsSafe } = require('./hot_topics');
+const { buildImagePrompt, generateImage, getMonthlyCost } = require('./imagegen');
+const { saveAsset } = require('./asset_ingest');
 
 // ============ 配置（密钥从环境变量读取，避免泄露） ============
 const CONFIG = {
@@ -28,6 +34,10 @@ const CONFIG = {
   DEEPSEEK_MODEL: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
   FEISHU_APP_ID: process.env.FEISHU_APP_ID || 'cli_aae46311a3781cee',
   PROJECT_DIR: path.resolve(__dirname, '..'),
+  IMAGEGEN_ENABLED: (process.env.IMAGEGEN_ENABLED || 'true') !== 'false',
+  IMAGEGEN_MAX_PER_PIPELINE: parseInt(process.env.IMAGEGEN_MAX_PER_PIPELINE || '8', 10),
+  IMAGEGEN_MONTHLY_BUDGET: parseFloat(process.env.IMAGEGEN_MONTHLY_BUDGET || '30'),
+  IMAGEGEN_MISS_SCORE: parseFloat(process.env.IMAGEGEN_MISS_SCORE || '0.4'),
 };
 
 // 启动时检查必要配置
@@ -310,6 +320,7 @@ async function stepAssetSearch(script, pipelineId) {
   const scriptFile = path.join(outDir, 'script.json');
 
   // 确保脚本文件存在
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
   if (!fs.existsSync(scriptFile)) {
     fs.writeFileSync(scriptFile, JSON.stringify(script, null, 2), 'utf-8');
   }
@@ -346,6 +357,104 @@ async function stepAssetSearch(script, pipelineId) {
   }
 }
 
+// ============ 步骤 5.5: AI 文生图补位 (M12) ============
+/**
+ * 对素材检索 miss 的分镜执行 AI 生成补位，产物注入 candidates（source: 'ai_generated'）
+ * 降级链: 本地素材 → 外部源(未实现自动跳过) → AI 生成 → 渐变兜底(不阻断)
+ * 保护: 全局开关 / 单条配额 / 连续失败熔断 / 月预算熔断
+ */
+async function stepImageGenFill(assetResult, script, pipelineId, options = {}) {
+  if (!CONFIG.IMAGEGEN_ENABLED) return assetResult;
+  if (!assetResult || !assetResult.searchResults) return assetResult;
+
+  // 定位 scenes 数组（兼容嵌套结构）
+  let container = assetResult.searchResults;
+  if (!Array.isArray(container.scenes)) {
+    container = (function findScenes(o) {
+      if (!o || typeof o !== 'object') return null;
+      if (Array.isArray(o.scenes)) return o;
+      for (const k of Object.keys(o)) { const f = findScenes(o[k]); if (f) return f; }
+      return null;
+    })(container);
+    if (!container) return assetResult;
+  }
+  const scenes = container.scenes;
+
+  // I2.5: 既有候选标记来源（本地库）
+  for (const s of scenes) {
+    for (const c of (s.candidates || [])) if (!c.source) c.source = 'local';
+  }
+
+  // 月预算熔断
+  const monthly = getMonthlyCost();
+  if (monthly.total >= CONFIG.IMAGEGEN_MONTHLY_BUDGET) {
+    console.warn(`   ⛔ 当月生成成本 ¥${monthly.total} 已达预算上限 ¥${CONFIG.IMAGEGEN_MONTHLY_BUDGET}，跳过 AI 补位`);
+    return assetResult;
+  }
+
+  // 目标平台 → 尺寸列表（单平台单尺寸，双平台才双生成，I2.4）
+  const platforms = options.platforms || ['youtube'];
+  const wantsPortrait = platforms.some((p) => ['douyin', 'kuaishou', 'tiktok'].includes(p));
+  const wantsLandscape = platforms.some((p) => ['youtube', 'bilibili'].includes(p)) || !wantsPortrait;
+  const targets = [];
+  if (wantsPortrait) targets.push('portrait');
+  if (wantsLandscape) targets.push('landscape');
+  const SIZE = { landscape: { w: 1920, h: 1080 }, portrait: { w: 1080, h: 1920 } };
+
+  let generated = 0, consecutiveFailures = 0;
+  for (const scene of scenes) {
+    // 有效 miss：无候选，或最高分低于阈值（基线噪声分≈0.26 视为未命中，可配置）
+    const topScore = Math.max(0, ...(scene.candidates || []).map((c) => c.score || 0));
+    const effectiveMiss = (scene.candidates || []).length === 0 || scene.no_match || topScore < CONFIG.IMAGEGEN_MISS_SCORE;
+    if (!effectiveMiss) continue;
+    if (generated >= CONFIG.IMAGEGEN_MAX_PER_PIPELINE) {
+      console.warn(`   ⚠️ 已达单条配额 ${CONFIG.IMAGEGEN_MAX_PER_PIPELINE} 张，剩余 miss 分镜走渐变兜底`);
+      break;
+    }
+    if (consecutiveFailures >= 3) {
+      console.warn('   ⛔ 连续失败 ≥3 次，熔断本管线后续 AI 调用（待飞书通道接入后推送通知）');
+      break;
+    }
+
+    try {
+      for (const ori of targets) {
+        // 按方向分别构建 prompt（横竖构图不同，禁止共用）
+        const builtOri = await buildImagePrompt(scene, { style: options.style || '', type: 'scene', orientation: ori });
+        if (builtOri.skip) { console.log(`   ⏭️ 分镜${scene.index}(${ori}) 不触发 AI: ${builtOri.reason}`); break; }
+        const { w, h } = SIZE[ori];
+        const r = await generateImage({ prompt: builtOri.prompt, negativePrompt: builtOri.negative_prompt, width: w, height: h, type: 'scene', pipelineId, sceneIndex: scene.index });
+        const meta = saveAsset(r.imageBuffer, {
+          type: 'scene', orientation: ori, targetWidth: w, targetHeight: h,
+          prompt: builtOri.prompt, negativePrompt: builtOri.negative_prompt,
+          pipelineId, sceneIndex: scene.index, cost: r.cost, provider: r.provider, keywords: builtOri.keywords || [],
+        });
+        scene.candidates = scene.candidates || [];
+        scene.candidates.push({
+          file: meta.file, file_path: meta.file_path, start: 0, end: scene.duration || 5,
+          score: 0.6, tags: meta.tags, source: 'ai_generated',
+          ai_meta: { prompt: builtOri.prompt, negative_prompt: builtOri.negative_prompt, generated_at: meta.generated_at, cost: r.cost, provider: r.provider, scene_index: scene.index },
+        });
+        generated++;
+      }
+      scene.no_match = false;
+      consecutiveFailures = 0;
+    } catch (e) {
+      consecutiveFailures++;
+      console.warn(`   ❌ 分镜${scene.index} AI 补位失败 (${consecutiveFailures}/3): ${e.message}`);
+    }
+  }
+
+  // 持久化更新后的检索结果（含 AI 候选），供渲染与审阅追溯
+  try {
+    const outDir = path.join(CONFIG.PROJECT_DIR, 'outputs', pipelineId);
+    if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+    fs.writeFileSync(path.join(outDir, 'script_assets.json'), JSON.stringify(assetResult.searchResults, null, 2), 'utf-8');
+  } catch { /* 持久化失败不阻断 */ }
+
+  console.log(`   🎨 AI 补位完成: 生成 ${generated} 张`);
+  return assetResult;
+}
+
 // ============ 步骤 6: 分镜匹配 + 审阅点2 创建 (T1.8) ============
 async function stepStoryboardReview(pipelineId, script, ttsResult, assetResult) {
   console.log('\n🎬 [步骤6] 分镜匹配 + 审阅点2...');
@@ -379,6 +488,7 @@ async function stepRenderWithReview(pipelineId, script, ttsResult, assetResult) 
   const reviewData = {
     pipelineId,
     script,
+    assetSearch: assetResult,
     props: propsResult.props,
     renderResult,
     outputFile: renderResult.outputFile,
@@ -449,6 +559,7 @@ async function runFullPipeline(userIdea, options = {}) {
     // Step 5: 素材检索
     console.log('\n🔍 [步骤5/7] 素材检索...');
     const assetResult = await stepAssetSearch(scriptResult.script, pipelineId);
+    await stepImageGenFill(assetResult, scriptResult.script, pipelineId, options);
     results.assetSearch = assetResult;
     results.steps.push({ name: 'asset_search', tokens: 0, ok: assetResult.success });
     
@@ -461,7 +572,7 @@ async function runFullPipeline(userIdea, options = {}) {
         assetResult?.searchResults,
         results.tts?.voicePath || null,
         pipelineId,
-        { template: 'animation_knowledge' }
+        { template: options.template || 'animation_knowledge' }
       );
       results.props = propsResult;
       results.steps.push({ name: 'props_gen', tokens: 0, ok: true });
@@ -667,7 +778,8 @@ function startServer() {
           if (review.reviewPoint === 1) {
             const script = review.data.script.script;
             const ttsResult = await stepTTS(script, id);
-            const assetResult = await stepAssetSearch(script, id);
+            let assetResult = await stepAssetSearch(script, id);
+            assetResult = await stepImageGenFill(assetResult, script, id, review.data.options || {});
             const storyboardReview = await stepStoryboardReview(id, script, ttsResult, assetResult);
 
             res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -766,6 +878,89 @@ function startServer() {
         }
       }
       
+      // API: AI 素材重新生成 (M13) —— 仅替换候选/重渲染，不重跑整条管线
+      if (url.pathname.endsWith('/regenerate-asset') && url.pathname.includes('/api/review/') && req.method === 'POST') {
+        const id = url.pathname.split('/')[3];
+        const body = await readBody();
+        const { scene_index, feedback = '' } = JSON.parse(body || '{}');
+
+        const review = reviewStore.get(id);
+        if (!review) {
+          res.writeHead(404, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: '审核不存在' }));
+        }
+        if (review.status !== 'pending' || ![2, 3].includes(review.reviewPoint)) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: '仅审阅点 2/3 的待审状态支持重新生成', status: review.status, review_point: review.reviewPoint }));
+        }
+        if (typeof scene_index === 'undefined') {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ error: '缺少 scene_index 参数' }));
+        }
+
+        try {
+          // 定位分镜与候选（审阅点2: data.assetSearch；审阅点3: data.assetSearch 已在创建时存入）
+          const searchData = review.data.assetSearch?.searchResults || review.data.assetSearch;
+          const container = (function findScenes(o) {
+            if (!o || typeof o !== 'object') return null;
+            if (Array.isArray(o.scenes)) return o;
+            for (const k of Object.keys(o)) { const f = findScenes(o[k]); if (f) return f; }
+            return null;
+          })(searchData);
+          const scene = container?.scenes?.find((s) => (s.index || s.scene_index) === scene_index);
+          if (!scene) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: `未找到分镜 ${scene_index}` }));
+          }
+
+          // 基于原分镜约束 + 用户反馈重构建 prompt
+          const built = await buildImagePrompt(scene, { style: review.data.options?.style || '', type: 'scene', orientation: 'landscape', feedback });
+          if (built.skip) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({ error: `该分镜不适合 AI 生成: ${built.reason}` }));
+          }
+
+          const r = await generateImage({ prompt: built.prompt, negativePrompt: built.negative_prompt, width: 1920, height: 1080, type: 'scene', pipelineId: id, sceneIndex: scene_index });
+          const meta = saveAsset(r.imageBuffer, {
+            type: 'scene', orientation: 'landscape', targetWidth: 1920, targetHeight: 1080,
+            prompt: built.prompt, negativePrompt: built.negative_prompt,
+            pipelineId: id, sceneIndex: scene_index, cost: r.cost, provider: r.provider, keywords: built.keywords || [],
+          });
+
+          // 替换 AI 候选（旧文件保留落盘，仅从候选中移除）
+          scene.candidates = (scene.candidates || []).filter((c) => c.source !== 'ai_generated');
+          const newCandidate = {
+            file: meta.file, file_path: meta.file_path, start: 0, end: scene.duration || 5,
+            score: 0.6, tags: meta.tags, source: 'ai_generated',
+            ai_meta: { prompt: built.prompt, negative_prompt: built.negative_prompt, generated_at: meta.generated_at, cost: r.cost, provider: r.provider, scene_index, feedback },
+          };
+          scene.candidates.push(newCandidate);
+          scene.no_match = false;
+          review.data.regenCount = (review.data.regenCount || 0) + 1;
+
+          // 审阅点 3：成片已渲染，需重渲染使新素材生效（创建新的待审点3，仍保持 pending）
+          if (review.reviewPoint === 3) {
+            await stepRenderWithReview(id, review.data.script, review.data.tts, review.data.assetSearch);
+          }
+
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            success: true,
+            pipelineId: id,
+            scene_index,
+            new_candidate: newCandidate,
+            regen_count: review.data.regenCount,
+            review_point: review.reviewPoint,
+            message: review.reviewPoint === 3
+              ? '已重新生成并重新渲染成片，请继续审阅'
+              : '已重新生成并替换候选，请继续审阅',
+          }));
+        } catch (e) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+      }
+
       // API: 审核打回 (T1.5)
       if (url.pathname.endsWith('/reject') && url.pathname.includes('/api/review/') && req.method === 'POST') {
         const id = url.pathname.split('/')[3];
@@ -913,7 +1108,32 @@ if (command === 'start') {
   startServer();
 } else if (command === 'test') {
   const idea = process.argv[3] || 'AI在医疗领域的革命性应用';
-  runFullPipeline(idea).catch(console.error);
+  const templateArg = process.argv[4]; // 'portrait' 或具体模板 id
+  const template = templateArg === 'portrait'
+    ? 'animation_knowledge_portrait'
+    : (templateArg || 'animation_knowledge');
+  runFullPipeline(idea, { template }).catch(console.error);
+} else if (command === 'imagefill') {
+  // 调试入口: 对给定脚本文件执行 素材检索 + AI 补位，不跑完整管线
+  // 用法: node engine.js imagefill <script.json> [style] [platforms逗号分隔]
+  const scriptFile = process.argv[3];
+  if (!scriptFile) { console.log('用法: node engine.js imagefill <script.json> [style] [platforms]'); process.exit(1); }
+  const script = JSON.parse(fs.readFileSync(scriptFile, 'utf-8'));
+  const options = {
+    style: process.argv[4] || '',
+    platforms: process.argv[5] ? process.argv[5].split(',') : ['youtube'],
+  };
+  const pid = `imagefill_${Date.now()}`;
+  (async () => {
+    let assetResult = await stepAssetSearch(script, pid);
+    assetResult = await stepImageGenFill(assetResult, script, pid, options);
+    const scenes = assetResult?.searchResults?.scenes || [];
+    console.log('\n📋 结果:');
+    for (const s of scenes) {
+      const srcs = (s.candidates || []).map((c) => `${c.file}(${c.source || 'local'})`).join(', ');
+      console.log(`   分镜${s.index}: no_match=${s.no_match} | ${srcs || '无候选'}`);
+    }
+  })().catch((e) => { console.error('❌', e); process.exit(1); });
 } else {
   console.log('AI Video Factory 工作流引擎');
   console.log('用法:');

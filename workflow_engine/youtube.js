@@ -15,6 +15,10 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+
+// 加载 .env 环境变量（必须在读取任何 process.env 配置之前）
+require('./env');
+
 const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const PROJECT_DIR = path.resolve(__dirname, '..');
